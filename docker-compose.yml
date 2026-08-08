@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5435:5435"
+      - "5434:5432"
     volumes:
       - sourcelab_pg_data:/var/lib/postgresql/data
      

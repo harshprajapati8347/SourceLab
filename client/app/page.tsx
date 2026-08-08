@@ -1,7 +1,29 @@
-export default function Home() {
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { getSession } from "@/lib/auth-server";
+import { authRoutes } from "@/lib/auth-routes";
+
+export default async function HomePage() {
+  const session = await getSession();
+
+  if (session) {
+    redirect(authRoutes.dashboard);
+  }
+
   return (
-    <div>
-      <h1>Hello World</h1>
+    <div className="flex min-h-svh flex-col items-center justify-center gap-6 bg-muted p-6">
+      <div className="flex max-w-lg flex-col items-center gap-4 text-center">
+        <h1 className="font-heading text-3xl font-semibold tracking-tight">
+          SourceLab AI
+        </h1>
+        <p className="text-muted-foreground">
+          Sign in to start chatting with your books.
+        </p>
+        <Button nativeButton={false} render={<Link href={authRoutes.login} />}>
+          Get started
+        </Button>
+      </div>
     </div>
   );
 }

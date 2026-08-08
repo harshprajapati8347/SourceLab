@@ -1,17 +1,31 @@
-import express from "express";
 import "dotenv/config";
+import { toNodeHandler } from "better-auth/node";
+import cors from "cors";
+import express from "express";
+import { auth } from "./lib/auth.js";
 
 const app = express();
-const PORT = process.env.PORT;
+const port = process.env.PORT ?? 8080;
+const clientUrl = process.env.CLIENT_URL ?? "http://localhost:3000";
 
-app.get("/", (req, res) => {
-  res.send("Hello World");
+app.use(
+  cors({
+    origin: clientUrl,
+    credentials: true,
+  }),
+);
+
+app.all("/api/auth/{*any}", toNodeHandler(auth));
+app.use(express.json());
+
+app.get("/", (_req, res) => {
+  res.json({ message: "Hello from SourceLab API" });
 });
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+app.listen(port, () => {
+  console.log(`Server running on http://localhost:${port}`);
 });
