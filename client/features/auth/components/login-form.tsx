@@ -18,8 +18,8 @@ import {
   FieldSeparator,
 } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
-import { authRoutes } from "@/lib/auth-routes";
-import { signIn } from "@/lib/auth-client";
+import { signIn } from "../lib/auth-client";
+import { authRoutes } from "../lib/auth-routes";
 
 function GoogleIcon({ className }: { className?: string }) {
   return (
@@ -62,31 +62,23 @@ export function LoginForm({
     setIsLoading(true);
     setError(null);
 
-    try {
-      const { data, error } = await signIn.social({
-        provider: "google",
-        callbackURL: callbackUrl,
-      });
+    const { data, error } = await signIn.social({
+      provider: "google",
+      callbackURL: callbackUrl,
+    });
 
-      if (error) {
-        setError(error.message ?? "Something went wrong. Please try again.");
-        setIsLoading(false);
-        return;
-      }
-
-      if (data?.url && data.redirect) {
-        window.location.href = data.url;
-        return;
-      }
-    } catch (err: unknown) {
-      const errorMessage =
-        err instanceof Error
-          ? err.message
-          : "An unexpected error occurred. Please try again.";
-      setError(errorMessage);
-    } finally {
+    if (error) {
+      setError(error.message ?? "Something went wrong. Please try again.");
       setIsLoading(false);
+      return;
     }
+
+    if (data?.url && data.redirect) {
+      window.location.href = data.url;
+      return;
+    }
+
+    setIsLoading(false);
   }
 
   return (

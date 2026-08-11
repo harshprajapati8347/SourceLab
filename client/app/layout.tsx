@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, JetBrains_Mono, Figtree } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
-import { ThemeProvider } from "@/components/providers/theme-provider";
-import QueryProvider from "@/components/providers/query-provider";
+import QueryProvider from "@/shared/components/providers/query-provider";
+import { ThemeProvider } from "@/shared/components/providers/theme-provider";
 
 const figtreeHeading = Figtree({
   subsets: ["latin"],
@@ -27,7 +27,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "SourceLab AI",
-  description: "Chat with your books",
+  description: "Chat with your documents",
 };
 
 export default function RootLayout({

@@ -1,6 +1,5 @@
 import { Suspense } from "react";
-import { LoginForm } from "@/components/auth/login-form";
-import { unauth } from "@/lib/unauth";
+import { LoginForm, unauth } from "@/features/auth";
 
 export default async function LoginPage() {
   await unauth();

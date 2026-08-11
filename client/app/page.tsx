@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { getSession } from "@/lib/auth-server";
-import { authRoutes } from "@/lib/auth-routes";
+import { authRoutes, getSession } from "@/features/auth";
 
 export default async function HomePage() {
   const session = await getSession();
@@ -18,7 +17,7 @@ export default async function HomePage() {
           SourceLab AI
         </h1>
         <p className="text-muted-foreground">
-          Sign in to start chatting with your books.
+          Sign in to start chatting with your documents.
         </p>
         <Button nativeButton={false} render={<Link href={authRoutes.login} />}>
           Get started

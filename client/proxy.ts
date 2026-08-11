@@ -3,7 +3,7 @@ import {
   authRoutes,
   isProtectedRoute,
   isUnauthenticatedRoute,
-} from "@/lib/auth-routes";
+} from "@/features/auth";
 
 async function fetchSession(request: NextRequest) {
   const response = await fetch(
@@ -42,5 +42,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/login"],
+  matcher: ["/dashboard/:path*", "/workspace/:path*", "/login"],
 };
