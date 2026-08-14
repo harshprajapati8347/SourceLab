@@ -1,22 +1,59 @@
+import { v2 as cloudinary } from "cloudinary";
 import { ValidationError } from "../types/app-error.js";
 
 const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-const uploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET ?? "dt2jgaj48";
+const uploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET ?? "sourcelab";
+const apiKey = process.env.CLOUDINARY_API_KEY;
+const apiSecret = process.env.CLOUDINARY_API_SECRET;
 
 export type CloudinaryUploadResult = {
   secureUrl: string;
   publicId: string;
   bytes: number;
   originalFilename: string;
+  resourceType: "raw" | "image";
 };
 
 type CloudinaryUploadResponse = {
   secure_url: string;
   public_id: string;
   bytes: number;
+  resource_type?: string;
   error?: { message: string };
 };
 
+export function getSignedCloudinaryDownloadUrl(
+  publicId: string,
+  resourceType: "raw" | "image" = "raw",
+) {
+  if (!cloudName || !apiKey || !apiSecret) {
+    return null;
+  }
+
+  cloudinary.config({
+    cloud_name: cloudName,
+    api_key: apiKey,
+    api_secret: apiSecret,
+    secure: true,
+  });
+
+  return cloudinary.url(publicId, {
+    resource_type: resourceType,
+    type: "upload",
+    sign_url: true,
+    secure: true,
+  });
+}
+
+/**
+ * Uploads a PDF buffer to Cloudinary using an unsigned upload preset.
+ *
+ * @param buffer - PDF file bytes from Multer
+ * @param filename - Original filename (used in the multipart form)
+ * @returns Upload metadata including secure URL and public id
+ * @throws {ValidationError} When Cloudinary is not configured or upload is rejected
+ *
+ */
 export async function uploadPdfToCloudinary(
   buffer: Buffer,
   filename: string,
@@ -25,23 +62,17 @@ export async function uploadPdfToCloudinary(
     throw new ValidationError("Cloudinary is not configured on the server");
   }
 
-  if (!uploadPreset) {
-    throw new ValidationError(
-      "CLOUDINARY_UPLOAD_PRESET is required for PDF uploads",
-    );
-  }
-
   const form = new FormData();
   form.append(
     "file",
-    new Blob([buffer], { type: "application/pdf" }),
+    new Blob([new Uint8Array(buffer)], { type: "application/pdf" }),
     filename,
   );
   form.append("upload_preset", uploadPreset);
   form.append("folder", "sourcelab/pdfs");
 
   const response = await fetch(
-    `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`,
+    `https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`,
     { method: "POST", body: form },
   );
 
@@ -65,5 +96,6 @@ export async function uploadPdfToCloudinary(
     publicId: result.public_id,
     bytes: result.bytes,
     originalFilename: filename,
+    resourceType: result.resource_type === "image" ? "image" : "raw",
   };
 }

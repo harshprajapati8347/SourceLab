@@ -1,10 +1,10 @@
 import { Router } from "express";
 import {
-    createWorkspace,
-    deleteWorkspace,
-    getWorkspace,
-    listWorkspaces,
-    updateWorkspace,
+  createWorkspace,
+  deleteWorkspace,
+  getWorkspace,
+  listWorkspaces,
+  updateWorkspace,
 } from "../controllers/workspace.controller.js";
 import { requireAuth } from "../middleware/require-auth.middleware.js";
 import { asyncHandler } from "../utils/async-handler.js";

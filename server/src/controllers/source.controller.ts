@@ -1,98 +1,34 @@
 import type { Request, Response } from "express";
 import {
   createTextOrMarkdownSource,
+  bulkDeleteSourcesForWorkspace,
   deleteSourceForWorkspace,
+  getSourceChunksForWorkspace,
   getSourceForWorkspace,
+  importWebSearchSource,
   importWebsiteSource,
   importYoutubeSource,
   listSourcesForWorkspace,
+  reprocessSourceForWorkspace,
+  reprocessSourcesForWorkspace,
   uploadPdfSource,
 } from "../services/source.service.js";
 import { ValidationError } from "../types/app-error.js";
-import { getZodFieldErrors } from "../utils/zod-error.js";
 import {
+  bulkDeleteSourcesSchema,
   createSourceSchema,
+  importWebSearchSchema,
   importWebsiteSchema,
   importYoutubeSchema,
   listSourcesQuerySchema,
+  reprocessSourcesSchema,
   sourceIdParamSchema,
+  workspaceIdParamSchema,
 } from "../validators/source.validator.js";
-import { parseWorkspaceId } from "./workspace.controller.js";
 
-// Function to "parse" the source by "Source ID" and "Workspace ID" from the request parameters
-function parseSourceParams(params: Request["params"]) {
-  const parsed = sourceIdParamSchema.safeParse(params);
-
-  if (!parsed.success) {
-    throw new ValidationError(
-      "Invalid source id",
-      getZodFieldErrors(parsed.error),
-    );
-  }
-
-  return parsed.data;
-}
-
-// Function to "parse" the "list sources" query parameters
-function parseListQuery(query: Request["query"]) {
-  const parsed = listSourcesQuerySchema.safeParse(query);
-
-  if (!parsed.success) {
-    throw new ValidationError(
-      "Invalid query parameters",
-      getZodFieldErrors(parsed.error),
-    );
-  }
-
-  return parsed.data;
-}
-
-// Function to "parse" the "create source" body (text or markdown)
-function parseCreateBody(body: unknown) {
-  const parsed = createSourceSchema.safeParse(body);
-
-  if (!parsed.success) {
-    throw new ValidationError(
-      "Validation failed",
-      getZodFieldErrors(parsed.error),
-    );
-  }
-
-  return parsed.data;
-}
-
-// Function to "parse" the "import website" body (Website)
-function parseImportWebsiteBody(body: unknown) {
-  const parsed = importWebsiteSchema.safeParse(body);
-
-  if (!parsed.success) {
-    throw new ValidationError(
-      "Validation failed",
-      getZodFieldErrors(parsed.error),
-    );
-  }
-
-  return parsed.data;
-}
-
-// Function to "parse" the "import youtube" body (Youtube)
-function parseImportYoutubeBody(body: unknown) {
-  const parsed = importYoutubeSchema.safeParse(body);
-
-  if (!parsed.success) {
-    throw new ValidationError(
-      "Validation failed",
-      getZodFieldErrors(parsed.error),
-    );
-  }
-
-  return parsed.data;
-}
-
-// Function to "list" "sources" for a workspace
 export async function listSources(req: Request, res: Response) {
-  const { workspaceId } = parseWorkspaceId(req.params);
-  const filters = parseListQuery(req.query);
+  const { workspaceId } = workspaceIdParamSchema.parse(req.params);
+  const filters = listSourcesQuerySchema.parse(req.query);
   const sources = await listSourcesForWorkspace(
     workspaceId,
     req.session.user.id,
@@ -101,9 +37,8 @@ export async function listSources(req: Request, res: Response) {
   res.json(sources);
 }
 
-// Function to "get" a "source" by "Source ID" and "Workspace ID"
 export async function getSource(req: Request, res: Response) {
-  const { workspaceId, sourceId } = parseSourceParams(req.params);
+  const { workspaceId, sourceId } = sourceIdParamSchema.parse(req.params);
   const source = await getSourceForWorkspace(
     workspaceId,
     sourceId,
@@ -112,10 +47,19 @@ export async function getSource(req: Request, res: Response) {
   res.json(source);
 }
 
-// Function to "create" a "source" (text or markdown)
+export async function getSourceChunks(req: Request, res: Response) {
+  const { workspaceId, sourceId } = sourceIdParamSchema.parse(req.params);
+  const result = await getSourceChunksForWorkspace(
+    workspaceId,
+    sourceId,
+    req.session.user.id,
+  );
+  res.json(result);
+}
+
 export async function createSource(req: Request, res: Response) {
-  const { workspaceId } = parseWorkspaceId(req.params);
-  const input = parseCreateBody(req.body);
+  const { workspaceId } = workspaceIdParamSchema.parse(req.params);
+  const input = createSourceSchema.parse(req.body);
   const source = await createTextOrMarkdownSource(
     workspaceId,
     req.session.user.id,
@@ -124,9 +68,8 @@ export async function createSource(req: Request, res: Response) {
   res.status(201).json(source);
 }
 
-// Function to "upload" a "PDF" file to the cloudinary (pdf)
 export async function uploadPdf(req: Request, res: Response) {
-  const { workspaceId } = parseWorkspaceId(req.params);
+  const { workspaceId } = workspaceIdParamSchema.parse(req.params);
 
   if (!req.file) {
     throw new ValidationError("PDF file is required");
@@ -144,10 +87,9 @@ export async function uploadPdf(req: Request, res: Response) {
   res.status(201).json(source);
 }
 
-// Function to "import" a "website" source
 export async function importWebsite(req: Request, res: Response) {
-  const { workspaceId } = parseWorkspaceId(req.params);
-  const input = parseImportWebsiteBody(req.body);
+  const { workspaceId } = workspaceIdParamSchema.parse(req.params);
+  const input = importWebsiteSchema.parse(req.body);
   const source = await importWebsiteSource(
     workspaceId,
     req.session.user.id,
@@ -156,10 +98,9 @@ export async function importWebsite(req: Request, res: Response) {
   res.status(201).json(source);
 }
 
-// Function to "import" a "youtube" source
 export async function importYoutube(req: Request, res: Response) {
-  const { workspaceId } = parseWorkspaceId(req.params);
-  const input = parseImportYoutubeBody(req.body);
+  const { workspaceId } = workspaceIdParamSchema.parse(req.params);
+  const input = importYoutubeSchema.parse(req.body);
   const source = await importYoutubeSource(
     workspaceId,
     req.session.user.id,
@@ -168,9 +109,47 @@ export async function importYoutube(req: Request, res: Response) {
   res.status(201).json(source);
 }
 
-// Function to "delete" a "source" by "Source ID" and "Workspace ID"
 export async function deleteSource(req: Request, res: Response) {
-  const { workspaceId, sourceId } = parseSourceParams(req.params);
+  const { workspaceId, sourceId } = sourceIdParamSchema.parse(req.params);
   await deleteSourceForWorkspace(workspaceId, sourceId, req.session.user.id);
   res.status(204).send();
+}
+
+export async function bulkDeleteSources(req: Request, res: Response) {
+  const { workspaceId } = workspaceIdParamSchema.parse(req.params);
+  const input = bulkDeleteSourcesSchema.parse(req.body);
+  await bulkDeleteSourcesForWorkspace(
+    workspaceId,
+    req.session.user.id,
+    input.sourceIds,
+  );
+  res.status(204).send();
+}
+
+export async function reprocessSources(req: Request, res: Response) {
+  const { workspaceId } = workspaceIdParamSchema.parse(req.params);
+  const input = reprocessSourcesSchema.parse(req.body ?? {});
+  const result = await reprocessSourcesForWorkspace(
+    workspaceId,
+    req.session.user.id,
+    input,
+  );
+  res.json(result);
+}
+
+export async function reprocessSource(req: Request, res: Response) {
+  const { workspaceId, sourceId } = sourceIdParamSchema.parse(req.params);
+  await reprocessSourceForWorkspace(workspaceId, sourceId, req.session.user.id);
+  res.status(202).json({ reprocessed: true });
+}
+
+export async function importWebSearch(req: Request, res: Response) {
+  const { workspaceId } = workspaceIdParamSchema.parse(req.params);
+  const input = importWebSearchSchema.parse(req.body);
+  const source = await importWebSearchSource(
+    workspaceId,
+    req.session.user.id,
+    input,
+  );
+  res.status(201).json(source);
 }

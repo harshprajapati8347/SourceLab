@@ -1,4 +1,3 @@
-// Repository for "workspace" related database operations
 import prisma from "../lib/db.js";
 import type {
   CreateWorkspaceInput,
@@ -10,6 +9,7 @@ export const workspaceSelect = {
   title: true,
   description: true,
   icon: true,
+  defaultModel: true,
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -19,6 +19,7 @@ export type WorkspaceRecord = {
   title: string;
   description: string | null;
   icon: string | null;
+  defaultModel: string;
   createdAt: Date;
   updatedAt: Date;
 };

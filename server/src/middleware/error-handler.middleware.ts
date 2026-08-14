@@ -1,8 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import multer from "multer";
-import { ZodError } from "zod";
+import { flattenError, ZodError } from "zod";
 import { AppError } from "../types/app-error.js";
-import { getZodFieldErrors } from "../utils/zod-error.js";
 
 export function errorHandler(
   error: unknown,
@@ -14,7 +13,7 @@ export function errorHandler(
   if (error instanceof AppError) {
     res.status(error.statusCode).json({
       error: error.message,
-      ...(error.details ? { details: error.details } : {}),
+      details: error.details,
     });
     return;
   }
@@ -23,7 +22,7 @@ export function errorHandler(
   if (error instanceof ZodError) {
     res.status(400).json({
       error: "Validation failed",
-      details: getZodFieldErrors(error),
+      details: flattenError(error).fieldErrors,
     });
     return;
   }
