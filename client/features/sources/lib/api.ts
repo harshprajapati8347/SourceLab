@@ -4,6 +4,7 @@ import type {
   ImportWebsiteInput,
   ImportYoutubeInput,
   Source,
+  SourceChunksResponse,
   SourceFilters,
 } from "./types";
 
@@ -32,6 +33,12 @@ export function listSources(workspaceId: string, filters?: SourceFilters) {
 
 export function getSource(workspaceId: string, sourceId: string) {
   return apiFetch<Source>(`/api/workspaces/${workspaceId}/sources/${sourceId}`);
+}
+
+export function getSourceChunks(workspaceId: string, sourceId: string) {
+  return apiFetch<SourceChunksResponse>(
+    `/api/workspaces/${workspaceId}/sources/${sourceId}/chunks`,
+  );
 }
 
 export function createSource(workspaceId: string, input: CreateSourceInput) {
@@ -105,4 +112,41 @@ export function deleteSource(workspaceId: string, sourceId: string) {
   return apiFetch<void>(`/api/workspaces/${workspaceId}/sources/${sourceId}`, {
     method: "DELETE",
   });
+}
+
+export function bulkDeleteSources(workspaceId: string, sourceIds: string[]) {
+  return apiFetch<void>(`/api/workspaces/${workspaceId}/sources/bulk-delete`, {
+    method: "POST",
+    body: JSON.stringify({ sourceIds }),
+  });
+}
+
+export function reprocessSources(workspaceId: string, sourceIds?: string[]) {
+  return apiFetch<{ reprocessed: number }>(
+    `/api/workspaces/${workspaceId}/sources/reprocess`,
+    {
+      method: "POST",
+      body: JSON.stringify(sourceIds?.length ? { sourceIds } : {}),
+    },
+  );
+}
+
+export function reprocessSource(workspaceId: string, sourceId: string) {
+  return apiFetch<{ reprocessed: boolean }>(
+    `/api/workspaces/${workspaceId}/sources/${sourceId}/reprocess`,
+    { method: "POST" },
+  );
+}
+
+export function importWebSearchSource(
+  workspaceId: string,
+  input: { title: string; content: string; url: string },
+) {
+  return apiFetch<Source>(
+    `/api/workspaces/${workspaceId}/sources/import/web-search`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  );
 }

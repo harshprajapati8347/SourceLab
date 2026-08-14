@@ -26,7 +26,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SourceLab AI",
+  title: "SourceLab",
   description: "Chat with your documents",
 };
 

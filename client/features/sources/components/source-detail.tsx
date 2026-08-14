@@ -59,6 +59,14 @@ export function SourceDetail({ workspaceId, sourceId }: SourceDetailProps) {
     typeof metadata.fileUrl === "string" ? metadata.fileUrl : null;
   const fileName =
     typeof metadata.fileName === "string" ? metadata.fileName : null;
+  const chunkCount =
+    typeof metadata.chunkCount === "number" ? metadata.chunkCount : null;
+  const processingError =
+    typeof metadata.processingError === "string"
+      ? metadata.processingError
+      : null;
+  const isProcessing =
+    source.status === "PENDING" || source.status === "PROCESSING";
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
@@ -84,6 +92,7 @@ export function SourceDetail({ workspaceId, sourceId }: SourceDetailProps) {
             {formatDistanceToNow(new Date(source.createdAt), {
               addSuffix: true,
             })}
+            {chunkCount != null ? ` · ${chunkCount} chunks indexed` : null}
           </p>
         </div>
       </div>
@@ -119,19 +128,23 @@ export function SourceDetail({ workspaceId, sourceId }: SourceDetailProps) {
         </div>
       ) : null}
 
-      {source.content ? (
-        source.type === "MARKDOWN" ? (
-          <MarkdownPreview content={source.content} />
-        ) : (
-          <div className="rounded-2xl border bg-muted/30 p-4">
-            <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap font-mono text-sm leading-relaxed">
-              {source.content}
-            </pre>
-          </div>
-        )
+      {isProcessing ? (
+        <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+          Processing source — extracting text, chunking, and indexing for
+          search…
+        </div>
+      ) : source.status === "FAILED" ? (
+        <div className="rounded-2xl border border-destructive/40 bg-destructive/5 p-6 text-sm">
+          <p className="font-medium text-destructive">Processing failed</p>
+          {processingError ? (
+            <p className="mt-2 text-muted-foreground">{processingError}</p>
+          ) : null}
+        </div>
+      ) : source.content ? (
+        <MarkdownPreview content={source.content} />
       ) : (
         <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-          No extracted content yet. Processing will run in the next phase.
+          No extracted content available for this source.
         </div>
       )}
     </div>

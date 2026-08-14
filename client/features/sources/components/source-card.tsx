@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
-import { MoreHorizontalIcon, Trash2Icon } from "lucide-react";
+import { MoreHorizontalIcon, RefreshCwIcon, Trash2Icon } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -22,17 +22,30 @@ import { sourceRoutes } from "../lib/routes";
 import type { Source } from "../lib/types";
 import { SourceStatusBadge } from "./source-status-badge";
 import { SourceTypeIcon } from "./source-type-icon";
+import { cn } from "@/lib/utils";
 
 type SourceCardProps = {
   source: Source;
   onDelete?: (source: Source) => void;
+  onReprocess?: (source: Source) => void;
+  className?: string;
 };
 
-export function SourceCard({ source, onDelete }: SourceCardProps) {
+export function SourceCard({
+  source,
+  onDelete,
+  onReprocess,
+  className,
+}: SourceCardProps) {
   const href = sourceRoutes.detail(source.workspaceId, source.id);
 
   return (
-    <Card className="group/card relative transition-shadow hover:shadow-md">
+    <Card
+      className={cn(
+        "group/card relative transition-shadow hover:shadow-md",
+        className,
+      )}
+    >
       <Link
         href={href}
         className="absolute inset-0 z-0 rounded-[inherit] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -59,7 +72,7 @@ export function SourceCard({ source, onDelete }: SourceCardProps) {
             </div>
           </div>
 
-          {onDelete ? (
+          {onDelete || onReprocess ? (
             <div
               className="relative z-10"
               onClick={(event) => event.stopPropagation()}
@@ -79,13 +92,21 @@ export function SourceCard({ source, onDelete }: SourceCardProps) {
                   <span className="sr-only">Open menu</span>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    variant="destructive"
-                    onClick={() => onDelete(source)}
-                  >
-                    <Trash2Icon />
-                    Delete
-                  </DropdownMenuItem>
+                  {onReprocess ? (
+                    <DropdownMenuItem onClick={() => onReprocess(source)}>
+                      <RefreshCwIcon />
+                      Reprocess
+                    </DropdownMenuItem>
+                  ) : null}
+                  {onDelete ? (
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onClick={() => onDelete(source)}
+                    >
+                      <Trash2Icon />
+                      Delete
+                    </DropdownMenuItem>
+                  ) : null}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

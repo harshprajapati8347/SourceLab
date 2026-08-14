@@ -6,9 +6,12 @@ import { usePathname } from "next/navigation";
 import {
   ArrowLeftIcon,
   BookOpenIcon,
+  GraduationCapIcon,
   MessageSquareIcon,
   PlusIcon,
+  SettingsIcon,
 } from "lucide-react";
+import { learnRoutes } from "@/features/learn";
 import { SignOutButton } from "@/features/auth/components/sign-out-button";
 import {
   AddSourceDialog,
@@ -34,6 +37,7 @@ import {
 } from "@/components/ui/sidebar";
 import { workspaceRoutes } from "../lib/routes";
 import type { Workspace } from "../lib/types";
+import { WorkspaceHeaderActions } from "./workspace-header-actions";
 
 type WorkspaceShellProps = {
   workspace: Workspace;
@@ -45,8 +49,12 @@ export function WorkspaceShell({ workspace, children }: WorkspaceShellProps) {
   const [addSourceOpen, setAddSourceOpen] = useState(false);
 
   const sourcesPath = sourceRoutes.list(workspace.id);
+  const learnPath = learnRoutes.hub(workspace.id);
   const isSourcesActive = pathname.startsWith(sourcesPath);
-  const isChatActive = !isSourcesActive;
+  const isLearnActive = pathname.startsWith(learnPath);
+  const isChatActive =
+    !isSourcesActive && !isLearnActive && !pathname.includes("/settings");
+  const isSettingsActive = pathname.includes("/settings");
 
   return (
     <SidebarProvider>
@@ -83,11 +91,31 @@ export function WorkspaceShell({ workspace, children }: WorkspaceShellProps) {
                 </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton
+                    isActive={isLearnActive}
+                    render={<Link href={learnPath} />}
+                  >
+                    <GraduationCapIcon />
+                    <span>Learn</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
                     isActive={isSourcesActive}
                     render={<Link href={sourcesPath} />}
                   >
                     <BookOpenIcon />
                     <span>Sources</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    isActive={isSettingsActive}
+                    render={
+                      <Link href={workspaceRoutes.settings(workspace.id)} />
+                    }
+                  >
+                    <SettingsIcon />
+                    <span>Settings</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>
@@ -131,10 +159,11 @@ export function WorkspaceShell({ workspace, children }: WorkspaceShellProps) {
             <PlusIcon />
             Add source
           </Button>
+          <WorkspaceHeaderActions workspace={workspace} />
           <SignOutButton />
         </header>
 
-        <main className="flex flex-1 flex-col">{children}</main>
+        <main className="flex min-h-0 flex-1 flex-col">{children}</main>
       </SidebarInset>
 
       <AddSourceDialog

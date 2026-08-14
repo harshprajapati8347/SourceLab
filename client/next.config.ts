@@ -17,6 +17,14 @@ const nextConfig: NextConfig = {
         source: "/api/workspaces",
         destination: `${apiUrl}/api/workspaces`,
       },
+      {
+        source: "/api/memory/:path*",
+        destination: `${apiUrl}/api/memory/:path*`,
+      },
+      {
+        source: "/api/memory",
+        destination: `${apiUrl}/api/memory`,
+      },
     ];
   },
 };

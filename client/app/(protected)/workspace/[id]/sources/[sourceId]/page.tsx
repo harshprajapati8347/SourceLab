@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { requireAuth } from "@/features/auth";
 import { SourceDetail } from "@/features/sources";
-import { getWorkspaceOrNull, WorkspaceShell } from "@/features/workspaces";
+import { getWorkspaceOrNull } from "@/features/workspaces/lib/workspace-server";
+import { WorkspaceShell } from "@/features/workspaces";
 
 type SourceDetailPageProps = {
   params: Promise<{ id: string; sourceId: string }>;

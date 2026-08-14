@@ -84,12 +84,12 @@ export function WorkspaceFormDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {isEditing ? "Edit workspace" : "Create workspace"}
+            {isEditing ? "Edit notebook" : "Create notebook"}
           </DialogTitle>
           <DialogDescription>
             {isEditing
-              ? "Update your workspace details."
-              : "Start a new workspace to organize your sources and chats."}
+              ? "Update your notebook details."
+              : "Start a new notebook to organize your sources and chats."}
           </DialogDescription>
         </DialogHeader>
 
@@ -120,7 +120,7 @@ export function WorkspaceFormDialog({
               id="workspace-title"
               value={title}
               onChange={(event) => setTitle(event.target.value)}
-              placeholder="My research workspace"
+              placeholder="My research notebook"
               maxLength={120}
               disabled={isPending}
             />
