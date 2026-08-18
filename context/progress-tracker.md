@@ -7,7 +7,7 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 ## Current Status
 
 **Phase:** Core product feature-complete (auth, workspaces, sources/RAG, chat, learning artifacts, memory); no test/CI infrastructure yet.
-**Last completed (per git log):** Tooling chores — `.gitignore`/scripts/`inngest-cli` update, client TypeScript bumped to 6.0.3.
+**Last completed:** Known-issue cleanup — deleted orphaned client auth/provider/hook duplicates; documented `MEM0_API_KEY` and `TAVILY_API_KEY` in `server/.env.example`.
 **Next:** Not defined in-repo — see `build-plan.md` → Proposed Next Steps for inferred candidates; confirm real priorities with the project owner.
 
 ---
@@ -82,15 +82,15 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 
 ## Known Issues
 
-- **Orphaned duplicate files** in `client/lib/*`, `client/components/auth/*`, `client/components/providers/*`, `client/hooks/use-mobile.ts` — superseded by `client/features/auth/*` and `client/shared/*`, confirmed unused via repo-wide import search, not yet deleted.
-- **`server/.env.example` is incomplete** — missing `MEM0_API_KEY` and `TAVILY_API_KEY`, both of which are read by the server and silently disable memory/web-search features when absent (no error, just missing functionality) — easy to miss when setting up a new environment.
+_None currently._
 
 ---
 
 ## Decisions Made During Build
 
-_None recorded in-repo (no changelog/ADRs found). Log significant decisions here going forward — e.g. "why Pinecone namespaces per workspace instead of a metadata filter," "why Mem0 instead of storing memory in Postgres," etc._
+- **Orphan cleanup kept `client/lib/utils.ts`** — it is the live `cn()` helper imported by shadcn primitives and feature components; `client/app/(auth)/layout.tsx` is also live (login page wrapper), not a duplicate.
+- **Tavily and Mem0 remain optional env vars** — documented in `server/.env.example` with comments that missing keys degrade those features to no-ops rather than failing startup.
 
 ## Notes
 
-_Add notes here as work continues — workarounds, follow-ups, anything that differs from the other context files._
+- `client/lib/utils.ts` and `client/app/(auth)/layout.tsx` were checked during the orphan cleanup and are still live; they were not deleted. `client/components/ui/*` is the shadcn primitive set and is unrelated to the removed `components/auth` / `components/providers` leftovers.

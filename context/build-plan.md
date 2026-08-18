@@ -28,7 +28,10 @@ Treat this as a reconstructed history + a best-guess "what's next" list — conf
 `feat: use ai sdk and enhance chat functionality with new components, integrate memory settings, and update routing for workspaces` — Migrated chat to the Vercel AI SDK's streaming primitives, citation UI, memory settings page, conversation summarization, web search tool.
 
 ### Phase 7 — Chores
-`chore: update .gitignore, modify package.json scripts for dev and start, add inngest-cli` and `chore: bump TypeScript to 6.0.3 for the client` — tooling/DX cleanup, most recent commits.
+`chore: update .gitignore, modify package.json scripts for dev and start, add inngest-cli` and `chore: bump TypeScript to 6.0.3 for the client` — tooling/DX cleanup.
+
+### Phase 8 — Known-issue cleanup
+Deleted unused duplicate client auth/provider/hook files left over from the feature-folder migration. Documented optional `MEM0_API_KEY` and `TAVILY_API_KEY` in `server/.env.example`.
 
 ---
 
@@ -40,10 +43,8 @@ Every major feature area described in `project-overview.md` has a working implem
 
 ## Proposed Next Steps
 
-1. **Clean up orphaned legacy files** — `client/lib/auth-*.ts`, `client/lib/unauth.ts`, `client/lib/require-auth.ts`, `client/components/auth/*`, `client/components/providers/*`, `client/hooks/use-mobile.ts` are unused duplicates of `client/features/auth/*` and `client/shared/*` (see `architecture.md` → Known Issues). Low-risk deletion once confirmed.
-2. **Document missing env vars** — `server/.env.example` does not list `MEM0_API_KEY` or `TAVILY_API_KEY`, even though `lib/mem0.ts` and `lib/tavily.ts` both read them (both features degrade gracefully without them, but a new developer following `.env.example` alone won't discover memory/web-search exist). Add both to the example file.
-3. **No automated tests or CI** — there is no `*.test.ts`, test runner config, or `.github/workflows` in the repo. If quality gates are wanted, this is entirely greenfield.
-4. **Source library has no pagination** — `listSources` returns the full workspace source list; likely fine at small scale but worth revisiting if workspaces grow large.
-5. **Artifacts are not editable** — once generated, an artifact can only be deleted and regenerated, not edited in place.
-6. **`recharts` is installed and wired into `components/ui/chart.tsx` but unused** — either a dashboard/analytics view was planned and not yet built, or the dependency is dead weight. Confirm intent before adding new chart UI or removing the dependency.
-7. **Toast primitive (`components/ui/toast.tsx`) exists but isn't connected to a global provider/toaster** — errors currently surface as inline text; decide whether toasts are intended.
+1. **No automated tests or CI** — there is no `*.test.ts`, test runner config, or `.github/workflows` in the repo. If quality gates are wanted, this is entirely greenfield.
+2. **Source library has no pagination** — `listSources` returns the full workspace source list; likely fine at small scale but worth revisiting if workspaces grow large.
+3. **Artifacts are not editable** — once generated, an artifact can only be deleted and regenerated, not edited in place.
+4. **`recharts` is installed and wired into `components/ui/chart.tsx` but unused** — either a dashboard/analytics view was planned and not yet built, or the dependency is dead weight. Confirm intent before adding new chart UI or removing the dependency.
+5. **Toast primitive (`components/ui/toast.tsx`) exists but isn't connected to a global provider/toaster** — errors currently surface as inline text; decide whether toasts are intended.

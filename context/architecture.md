@@ -68,9 +68,6 @@
 │   │   ├── hooks/                  → use-mobile, use-debounced-value
 │   │   └── lib/api.ts              → apiFetch() + ApiError — single fetch wrapper for all client API calls
 │   ├── lib/utils.ts                → cn() helper (used everywhere)
-│   ├── lib/auth-*.ts, unauth.ts, require-auth.ts, components/auth/, components/providers/, hooks/use-mobile.ts
-│   │                                → ⚠️ Legacy duplicates of features/auth and shared/*. Nothing in the app
-│   │                                  imports these anymore — see "Known Issues" below.
 │   └── components.json             → shadcn config (style: base-rhea, base color: stone, icon lib: lucide)
 └── server/                         → Express API
     ├── src/
@@ -277,5 +274,4 @@ Auth tables (`user`, `session`, `account`, `verification`) are owned by Better A
 
 ## Known Issues / Cleanup Candidates
 
-- `client/lib/auth-client.ts`, `auth-server.ts`, `auth-routes.ts`, `require-auth.ts`, `unauth.ts`, `client/components/auth/*`, `client/components/providers/*`, and `client/hooks/use-mobile.ts` are **orphaned duplicates** of `client/features/auth/*` and `client/shared/*`. Nothing in the active app imports them (verified by search). They appear to be leftovers from a migration to the feature-based folder structure and are candidates for deletion.
-- `client/app/(auth)/layout.tsx` and `client/lib/utils.ts` vs feature-local equivalents should be checked the same way before assuming any top-level `client/lib` or `client/components` file (outside `components/ui`) is still live.
+_None currently. Orphaned client auth/provider/hook duplicates from the feature-folder migration were deleted; `client/lib/utils.ts` and `client/app/(auth)/layout.tsx` remain in use._
