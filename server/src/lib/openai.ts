@@ -14,7 +14,7 @@ import {
 
 export { CHAT_MODEL, EMBEDDING_DIMENSIONS, EMBEDDING_MODEL };
 
-let client: OpenAI | null = null;
+let client: InstanceType<typeof OpenAI> | null = null;
 
 /**
  * Creates embedding vectors for one or more text strings.
