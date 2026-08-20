@@ -3,6 +3,7 @@
  *
  * Reuses one client in development (via `globalThis`) to survive hot reloads.
  * Requires `DATABASE_URL` in the environment.
+ * `PG_POOL_MAX` caps the pg pool (default 5) so a 512 MB host does not open too many connections.
  *
  */
 
@@ -20,6 +21,7 @@ const prisma =
     adapter: new PrismaPg(
       new Pool({
         connectionString: process.env.DATABASE_URL,
+        max: Number(process.env.PG_POOL_MAX ?? 5),
       }),
     ),
   });

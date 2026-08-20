@@ -1,6 +1,10 @@
 node_modules
 npm-debug.log
 dist
-.env
 .git
 .gitignore
+.env
+.env.*
+*.md
+src/generated
+Dockerfile*

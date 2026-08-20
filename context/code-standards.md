@@ -152,6 +152,8 @@ Never hardcode a key, URL, or secret. Current variables:
 | `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_UPLOAD_PRESET` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | `lib/cloudinary.ts` |
 | `FIRECRAWL_API_KEY` | `lib/firecrawl.ts` |
 | `INNGEST_DEV` | Inngest local dev mode |
+| `INNGEST_EVENT_KEY` / `INNGEST_SIGNING_KEY` | Inngest Cloud in production (`server/.env.production` on EC2) |
+| `PG_POOL_MAX` | Optional pg pool size (default 5) |
 | `OPENAI_API_KEY` | `lib/openai.ts`, `@ai-sdk/openai` chat calls |
 | `PINECONE_API_KEY` / `PINECONE_INDEX` | `lib/pinecone.ts` |
 | `TAVILY_API_KEY` | `lib/tavily.ts` (chat web search tool — feature no-ops without it) |
