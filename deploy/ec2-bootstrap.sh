@@ -30,8 +30,8 @@ sudo usermod -aG docker "$USER"
 
 echo "==> App directory"
 mkdir -p "$HOME/sourcelab"
-if [ ! -f "$HOME/sourcelab/.env.production" ]; then
-  echo "Create $HOME/sourcelab/.env.production before the first GitHub Actions deploy."
+if [ ! -f "$HOME/sourcelab/server/.env.production" ]; then
+  echo "Create $HOME/sourcelab/server/.env.production before the first GitHub Actions deploy."
 fi
 
 echo "==> Architecture: $(uname -m)"

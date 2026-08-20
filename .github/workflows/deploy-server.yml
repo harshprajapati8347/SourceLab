@@ -83,8 +83,8 @@ jobs:
             set -euo pipefail
             cd "/home/${EC2_HOME_USER}/sourcelab"
 
-            if [ ! -f .env.production ]; then
-              echo ".env.production is missing on the server. Create it before deploying."
+            if [ ! -f ./server/.env.production ]; then
+              echo "./server/.env.production is missing on the server. Create it before deploying."
               exit 1
             fi
 
