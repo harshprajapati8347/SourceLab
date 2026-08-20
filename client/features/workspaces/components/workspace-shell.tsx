@@ -57,7 +57,7 @@ export function WorkspaceShell({ workspace, children }: WorkspaceShellProps) {
   const isSettingsActive = pathname.includes("/settings");
 
   return (
-    <SidebarProvider>
+    <SidebarProvider className="h-svh overflow-hidden">
       <Sidebar>
         <SidebarHeader className="border-b border-sidebar-border">
           <div className="flex items-center gap-2 px-2 py-1">
@@ -143,8 +143,8 @@ export function WorkspaceShell({ workspace, children }: WorkspaceShellProps) {
         <SidebarRail />
       </Sidebar>
 
-      <SidebarInset>
-        <header className="flex h-14 items-center gap-3 border-b px-4">
+      <SidebarInset className="min-h-0 overflow-hidden">
+        <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
           <SidebarTrigger />
           <div className="min-w-0 flex-1">
             <h1 className="truncate font-heading text-base font-semibold">
@@ -163,7 +163,9 @@ export function WorkspaceShell({ workspace, children }: WorkspaceShellProps) {
           <SignOutButton />
         </header>
 
-        <main className="flex min-h-0 flex-1 flex-col">{children}</main>
+        <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          {children}
+        </main>
       </SidebarInset>
 
       <AddSourceDialog

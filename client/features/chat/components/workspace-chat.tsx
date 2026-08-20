@@ -233,8 +233,8 @@ export function WorkspaceChat({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-2 border-b px-4 py-3">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="flex shrink-0 items-center gap-2 border-b bg-background px-4 py-3">
         <Select
           value={conversationId ?? "new"}
           onValueChange={(value) => {
@@ -289,7 +289,7 @@ export function WorkspaceChat({
         ) : null}
       </div>
 
-      <MessageScrollerProvider>
+      <MessageScrollerProvider autoScroll>
         <MessageScroller className="min-h-0 flex-1">
           <MessageScrollerViewport>
             <MessageScrollerContent className="mx-auto w-full max-w-3xl px-4 py-6">
@@ -321,7 +321,10 @@ export function WorkspaceChat({
                       !isUser && isStreaming && isLastMessage;
 
                     return (
-                      <MessageScrollerItem key={message.id} scrollAnchor>
+                      <MessageScrollerItem
+                        key={message.id}
+                        className="[content-visibility:visible]"
+                      >
                         <Message align={isUser ? "end" : "start"}>
                           {!isUser ? (
                             <MessageAvatar className="size-8">
