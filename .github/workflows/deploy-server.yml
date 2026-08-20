@@ -94,7 +94,13 @@ jobs:
             export IMAGE_TAG
 
             docker compose -f docker-compose.prod.yml pull server
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans --force-recreate --wait --wait-timeout 180
+            if ! docker compose -f docker-compose.prod.yml up -d --remove-orphans --force-recreate --wait --wait-timeout 180; then
+              echo "==== deploy failed; container status and logs ===="
+              docker ps -a --filter name=sourcelab-server || true
+              docker logs --tail 200 sourcelab-server || true
+              docker inspect sourcelab-server --format 'status={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}}' || true
+              exit 1
+            fi
 
             docker image prune -af
             docker logout

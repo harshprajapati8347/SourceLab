@@ -8,13 +8,13 @@ RUN apk add --no-cache openssl libc6-compat
 
 COPY package.json package-lock.json .npmrc ./
 COPY prisma ./prisma
-COPY prisma.config.ts ./
+COPY prisma.config.js ./
 
 RUN npm ci
 
 COPY . .
 
-# prisma generate reads prisma.config.ts; no live DB needed
+# prisma generate reads prisma.config.js; no live DB needed
 ENV DATABASE_URL="postgresql://build:build@127.0.0.1:5432/build"
 
 RUN npx prisma generate && npm run build \
@@ -31,15 +31,15 @@ RUN apk add --no-cache openssl libc6-compat
 
 ENV NODE_ENV=production
 ENV NODE_OPTIONS="--max-old-space-size=192"
+ENV PATH="/app/node_modules/.bin:$PATH"
 
 COPY package.json package-lock.json .npmrc ./
 COPY prisma ./prisma
-COPY prisma.config.ts ./
+COPY prisma.config.js ./
 
-# Prod deps + Prisma CLI (devDependency) so migrate deploy works at boot
-RUN npm ci --omit=dev \
-  && npm install prisma@7.9.1 --omit=dev --no-audit --no-fund \
-  && npm cache clean --force
+# prisma is a production dependency so migrate deploy can run at boot
+# without npx downloading a second CLI that cannot resolve prisma/config.
+RUN npm ci --omit=dev && npm cache clean --force
 
 COPY --from=builder --chown=node:node /app/dist ./dist
 
@@ -49,4 +49,4 @@ USER node
 
 EXPOSE 8080
 
-CMD ["sh", "-c", "npx prisma migrate deploy && exec node dist/index.js"]
+CMD ["sh", "-c", "prisma migrate deploy && exec node dist/index.js"]

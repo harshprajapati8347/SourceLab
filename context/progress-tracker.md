@@ -7,7 +7,7 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 ## Current Status
 
 **Phase:** Core product feature-complete (auth, workspaces, sources/RAG, chat, learning artifacts, memory); server production deploy path (Docker Hub + GitHub Actions → EC2) is in place.
-**Last completed:** Production deploy prep — multi-stage `Dockerfile.prod`, Hub-pull `docker-compose.prod.yml` sized for a 512 MB host, GitHub Actions build/push/SSH deploy, managed-Postgres + Inngest Cloud env template.
+**Last completed:** Fixed production boot crash — Prisma CLI was omitted from the runtime image (`devDependency` + `npx`), so `migrate deploy` could not load `prisma/config` and the container restarted as unhealthy.
 **Next:** Run the one-time EC2 bootstrap, add GitHub/Docker Hub secrets, merge to `main`, and execute the first deploy. See `build-plan.md` for remaining product backlog.
 
 ---
@@ -87,7 +87,7 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 
 ## Known Issues
 
-_None currently._
+_None currently._ (Resolved: first EC2 deploy was unhealthy because `npx prisma migrate deploy` did not use the local Prisma CLI; `prisma` is now a production dependency and the image PATH includes `node_modules/.bin`.)
 
 ---
 
