@@ -187,7 +187,7 @@ saves it on Conversation, and feeds the last 16 messages to Mem0 for long-term l
 
 ## Database Schema (Prisma / PostgreSQL)
 
-Auth tables (`user`, `session`, `account`, `verification`) are owned by Better Auth's Prisma adapter — do not hand-edit their shape without checking Better Auth's migration expectations.
+Auth tables (`user`, `session`, `account`, `verification`) are owned by Better Auth's Prisma adapter — do not hand-edit their shape without checking Better Auth's migration expectations. Better Auth 1.7 requires `account.issuer` and a unique `(issuer, accountId)` key (Google OIDC issuer is `https://accounts.google.com`).
 
 ### `workspace`
 | Column | Type | Notes |

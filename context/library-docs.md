@@ -41,6 +41,7 @@ export const auth = betterAuth({
 - Mounted once in `server/src/index.ts`: `app.all("/api/auth/{*any}", toNodeHandler(auth))`, **before** `express.json()`.
 - Session check in middleware: `auth.api.getSession({ headers: fromNodeHeaders(req.headers) })` → attach to `req.session` (typed via `server/src/types/express.d.ts`).
 - Only Google is configured as a social provider — don't assume other providers exist.
+- Better Auth 1.7 requires `Account.issuer`. Google accounts use `https://accounts.google.com`. Schema + unique `(issuer, accountId)` live in `prisma/schema.prisma`; do not drop that column.
 - Client side uses `better-auth/react`'s `createAuthClient()` with no baseURL override (same-origin via Next.js proxy/CORS) — `signIn.social({ provider: "google", callbackURL })`, `signOut()`, `useSession()`.
 
 ### Express 5 (`express`)
