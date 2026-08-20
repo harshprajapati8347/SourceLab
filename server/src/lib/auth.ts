@@ -3,6 +3,7 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import prisma from "./db.js";
 
 const clientUrl = process.env.CLIENT_URL ?? "http://localhost:3000";
+const isProduction = process.env.NODE_ENV === "production";
 
 export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL ?? clientUrl,
@@ -15,6 +16,15 @@ export const auth = betterAuth({
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    },
+  },
+  advanced: {
+    useSecureCookies: isProduction,
+    defaultCookieAttributes: {
+      sameSite: "lax",
+      secure: isProduction,
+      httpOnly: true,
+      path: "/",
     },
   },
 });

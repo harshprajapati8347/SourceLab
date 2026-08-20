@@ -20,7 +20,7 @@ Project-specific usage notes for every third-party library actually installed in
 - Generator output is customized: `output = "../src/generated/prisma"` in `server/prisma/schema.prisma` — the client is generated into `server/src/generated/prisma`, not `node_modules/.prisma`. Import types from there: `import type { Prisma } from "../generated/prisma/client.js"`.
 - Client instance is a singleton in `server/src/lib/db.ts` (`import prisma from "../lib/db.js"`) — never instantiate a second `PrismaClient`.
 - Repositories always `select` an explicit set of columns (a `const xSelect = {...} as const` object) rather than returning the full row — derive types with `Prisma.<Model>GetPayload<{ select: typeof xSelect }>`.
-- Migrations live in `server/prisma/migrations/`; run `pnpm prisma:migrate` (dev) or the `start` script runs `prisma migrate deploy` before booting in production.
+- Migrations live in `server/prisma/migrations/`; run `pnpm prisma:migrate` (dev). Production containers run `prisma migrate deploy` on boot (`server/Dockerfile.prod`).
 - Better Auth owns the `user`/`session`/`account`/`verification` models via `prismaAdapter(prisma, { provider: "postgresql" })` — don't hand-edit their schema without checking Better Auth's expectations first.
 
 ### Better Auth (`better-auth`)

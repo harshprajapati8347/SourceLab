@@ -37,13 +37,14 @@ Deleted unused duplicate client auth/provider/hook files left over from the feat
 
 ## Current State (see `progress-tracker.md` for the full breakdown)
 
-Every major feature area described in `project-overview.md` has a working implementation: auth, workspace CRUD, all five source ingestion types + background processing, RAG chat with citations/web search/summarization, all six learning artifact types with viewers, and manual+learned memory. There is no automated test suite and no CI configuration in the repository.
+There is no automated test suite in the repository. Server production deploy uses GitHub Actions + Docker Hub + EC2 (`deploy-server.yml`).
 
 ---
 
 ## Proposed Next Steps
 
-1. **No automated tests or CI** — there is no `*.test.ts`, test runner config, or `.github/workflows` in the repo. If quality gates are wanted, this is entirely greenfield.
+1. **No automated tests** — there is no `*.test.ts` or test runner config. If quality gates are wanted, this is entirely greenfield.
+2. **Server deploy is configured but still needs a first production run** — GitHub secrets, EC2 bootstrap, managed Postgres, Inngest Cloud, and Vercel `API_URL` must be set by the operator (see `deploy/`).
 2. **Source library has no pagination** — `listSources` returns the full workspace source list; likely fine at small scale but worth revisiting if workspaces grow large.
 3. **Artifacts are not editable** — once generated, an artifact can only be deleted and regenerated, not edited in place.
 4. **`recharts` is installed and wired into `components/ui/chart.tsx` but unused** — either a dashboard/analytics view was planned and not yet built, or the dependency is dead weight. Confirm intent before adding new chart UI or removing the dependency.

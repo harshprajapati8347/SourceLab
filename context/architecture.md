@@ -36,6 +36,9 @@
 /
 ├── context/                       → This documentation (read before implementation)
 ├── docker-compose.yml             → Local Postgres (pgvector image, port 5434) for dev
+├── docker-compose.prod.yml        → Production API (Docker Hub image; no Postgres)
+├── deploy/                        → EC2 bootstrap script + production env template
+├── .github/workflows/             → GitHub Actions: build server image, deploy to EC2
 ├── client/                        → Next.js 16 App Router frontend
 │   ├── app/
 │   │   ├── layout.tsx             → Root layout — fonts, ThemeProvider, QueryProvider

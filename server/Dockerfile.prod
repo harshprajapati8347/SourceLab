@@ -1,15 +1,25 @@
-# ---------- Stage 1: build ----------
+# Build on GitHub Actions — never on the 512 MB EC2 host.
+# ---------- Stage 1: compile ----------
 FROM node:24-alpine AS builder
 
 WORKDIR /app
 
+RUN apk add --no-cache openssl libc6-compat
+
 COPY package.json package-lock.json .npmrc ./
+COPY prisma ./prisma
+COPY prisma.config.ts ./
+
 RUN npm ci
 
 COPY . .
 
-# Assumes a "build" script in package.json (e.g. "tsc") that outputs to ./dist
-RUN npm run build
+# prisma generate reads prisma.config.ts; no live DB needed
+ENV DATABASE_URL="postgresql://build:build@127.0.0.1:5432/build"
+
+RUN npx prisma generate && npm run build \
+  && mkdir -p dist/generated \
+  && cp -R src/generated/. dist/generated/
 
 
 # ---------- Stage 2: production runtime ----------
@@ -17,17 +27,26 @@ FROM node:24-alpine AS production
 
 WORKDIR /app
 
+RUN apk add --no-cache openssl libc6-compat
+
 ENV NODE_ENV=production
+ENV NODE_OPTIONS="--max-old-space-size=192"
 
 COPY package.json package-lock.json .npmrc ./
-RUN npm ci --omit=dev
+COPY prisma ./prisma
+COPY prisma.config.ts ./
 
-COPY --from=builder /app/dist ./dist
+# Prod deps + Prisma CLI (devDependency) so migrate deploy works at boot
+RUN npm ci --omit=dev \
+  && npm install prisma@7.9.1 --omit=dev --no-audit --no-fund \
+  && npm cache clean --force
+
+COPY --from=builder --chown=node:node /app/dist ./dist
+
+RUN chown -R node:node /app
+
+USER node
 
 EXPOSE 8080
 
-# Run as non-root
-USER node
-
-# Assumes compiled entry point is dist/index.js — adjust if yours differs
-CMD ["node", "dist/index.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && exec node dist/index.js"]
