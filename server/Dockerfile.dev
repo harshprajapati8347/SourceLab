@@ -1,0 +1,17 @@
+FROM node:24-alpine
+
+WORKDIR /app
+
+# Copy only manifest + lockfile first so this layer is cached
+# unless dependencies actually change
+COPY package.json package-lock.json .npmrc ./
+
+RUN npm ci
+
+COPY . .
+
+EXPOSE 8080
+
+# Assumes a "dev" script in package.json using something like
+# ts-node-dev / tsx watch / nodemon — swap if yours is named differently
+CMD ["npm", "run", "dev"]

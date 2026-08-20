@@ -1,0 +1,11 @@
+services:
+  server:
+    image: docker.io/harshprajapati0123/sourcelab-server:latest
+    container_name: sourcelab-server
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      NODE_ENV: production
+    env_file:
+      - .env.production
