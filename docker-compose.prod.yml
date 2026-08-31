@@ -1,0 +1,35 @@
+# EC2 pulls a pre-built image from Docker Hub. GitHub Actions sets
+# SERVER_IMAGE and IMAGE_TAG. Local default matches Docker Hub.
+services:
+  server:
+    image: ${SERVER_IMAGE:-harshprajapati0123/sourcelab-server}:${IMAGE_TAG:-latest}
+    container_name: sourcelab-server
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file:
+      - ./server/.env.production
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=192
+    mem_limit: 360m
+    memswap_limit: 720m
+    cpus: "1.5"
+    stop_grace_period: 15s
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8080/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

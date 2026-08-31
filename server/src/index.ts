@@ -8,9 +8,14 @@ import { registerRoutes } from "./routes/index.js";
 import { serve } from "inngest/express";
 import { inngest } from "./inngest/client.js";
 import { functions } from "./inngest/index.js";
+
 const app = express();
-const port = process.env.PORT ?? 8080;
+const port = Number(process.env.PORT ?? 8080);
 const clientUrl = process.env.CLIENT_URL ?? "http://localhost:3000";
+
+if (process.env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
+}
 
 app.use(
   cors({
@@ -35,6 +40,6 @@ registerRoutes(app);
 
 app.use(errorHandler);
 
-app.listen(port, () => {
-  console.log(`Server running on http://localhost:${port}`);
+app.listen(port, "0.0.0.0", () => {
+  console.log(`Server running on http://0.0.0.0:${port}`);
 });

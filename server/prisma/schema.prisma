@@ -71,6 +71,7 @@ model Session {
 
 model Account {
   id                    String    @id
+  issuer                String
   accountId             String
   issuer                String
   providerId            String
