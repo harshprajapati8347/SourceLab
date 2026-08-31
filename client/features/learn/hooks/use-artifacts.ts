@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { billingKeys } from "@/features/billing/hooks/use-billing";
 import {
   createArtifact,
   deleteArtifact,
@@ -53,6 +54,7 @@ export function useCreateArtifact(workspaceId: string) {
       void queryClient.invalidateQueries({
         queryKey: artifactKeys(workspaceId).all,
       });
+      void queryClient.invalidateQueries({ queryKey: billingKeys.all });
     },
   });
 }

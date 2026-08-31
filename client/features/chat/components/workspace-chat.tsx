@@ -49,6 +49,8 @@ import { CitationSources } from "./citation-sources";
 import { ChatComposer } from "./chat-composer";
 import type { ChatCitation } from "../lib/types";
 import { workspaceRoutes } from "@/features/workspaces/lib/routes";
+import { billingKeys } from "@/features/billing/hooks/use-billing";
+import { INSUFFICIENT_CREDITS_MESSAGE } from "@/features/billing/lib/constants";
 import { useChatPreferences } from "../stores/chat-preferences";
 import {
   downloadMarkdown,
@@ -119,6 +121,14 @@ export function WorkspaceChat({
             credentials: "include",
           });
 
+          if (response.status === 402) {
+            void queryClient.invalidateQueries({ queryKey: billingKeys.all });
+            const payload = (await response.json().catch(() => null)) as {
+              error?: string;
+            } | null;
+            throw new Error(payload?.error ?? INSUFFICIENT_CREDITS_MESSAGE);
+          }
+
           const newConversationId = response.headers.get("X-Conversation-Id");
           if (newConversationId) {
             handleConversationId(newConversationId);
@@ -133,6 +143,7 @@ export function WorkspaceChat({
       handleConversationId,
       chatPrefs.model,
       chatPrefs.webSearch,
+      queryClient,
     ],
   );
 
@@ -176,6 +187,7 @@ export function WorkspaceChat({
     void queryClient.invalidateQueries({
       queryKey: chatKeys(workspaceId).messages(conversationId),
     });
+    void queryClient.invalidateQueries({ queryKey: billingKeys.all });
   }, [status, conversationId, queryClient, workspaceId]);
 
   useEffect(() => {

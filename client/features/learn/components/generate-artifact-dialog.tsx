@@ -12,6 +12,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CreditsBadge } from "@/features/billing";
+import { ApiError } from "@/shared/lib/api";
 import {
   ARTIFACT_TYPE_DESCRIPTIONS,
   ARTIFACT_TYPE_LABELS,
@@ -33,18 +35,30 @@ export function GenerateArtifactDialog({
 }: GenerateArtifactDialogProps) {
   const [type, setType] = useState<ArtifactType>("SUMMARY");
   const [title, setTitle] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const createArtifact = useCreateArtifact(workspaceId);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    setError(null);
 
-    await createArtifact.mutateAsync({
-      type,
-      title: title.trim() || undefined,
-    });
+    try {
+      await createArtifact.mutateAsync({
+        type,
+        title: title.trim() || undefined,
+      });
 
-    setTitle("");
-    onOpenChange(false);
+      setTitle("");
+      onOpenChange(false);
+    } catch (submitError) {
+      setError(
+        submitError instanceof ApiError
+          ? submitError.message
+          : submitError instanceof Error
+            ? submitError.message
+            : "Could not start generation.",
+      );
+    }
   }
 
   return (
@@ -94,9 +108,11 @@ export function GenerateArtifactDialog({
                 placeholder="Custom title"
               />
             </div>
+            {error ? <p className="text-sm text-destructive">{error}</p> : null}
           </div>
 
           <DialogFooter>
+            <CreditsBadge />
             <Button
               type="button"
               variant="outline"

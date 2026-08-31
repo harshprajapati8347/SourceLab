@@ -9,6 +9,7 @@ import {
 import { findSourceById } from "../repositories/source.repository.js";
 import { findChunksBySourceId } from "../repositories/source-chunk.repository.js";
 import { processArtifactById } from "../services/artifact.service.js";
+import { applyCreditLifecycle } from "../services/billing.service.js";
 import { summarizeConversationById } from "../services/conversation-memory.service.js";
 
 export const processSource = inngest.createFunction(
@@ -88,8 +89,24 @@ export const summarizeConversation = inngest.createFunction(
   },
 );
 
+export const applyBillingCredits = inngest.createFunction(
+  {
+    id: "apply-billing-credits",
+    retries: 3,
+    triggers: [{ event: "billing/credits.apply" }],
+  },
+  async ({ event, step }) => {
+    const { userId, action } = event.data;
+
+    await step.run("apply", () => applyCreditLifecycle(userId, action));
+
+    return { userId, action };
+  },
+);
+
 export const functions = [
   processSource,
   generateArtifact,
   summarizeConversation,
+  applyBillingCredits,
 ];

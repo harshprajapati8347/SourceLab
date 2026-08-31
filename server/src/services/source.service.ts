@@ -12,6 +12,8 @@ import {
   updateSourceRecord,
   type SourceRecord,
 } from "../repositories/source.repository.js";
+import { CREDIT_COSTS } from "../config/plans.js";
+import { assertMinimumCredits } from "./credits.service.js";
 import { getWorkspaceByIdForUser } from "./workspace.service.js";
 import { NotFoundError } from "../types/app-error.js";
 import type {
@@ -35,8 +37,11 @@ import {
  *
  */
 async function createAndProcessSource(
+  userId: string,
   data: Parameters<typeof createSourceRecord>[0],
 ) {
+  await assertMinimumCredits(userId, CREDIT_COSTS.sourceProcessed);
+
   const source = await createSourceRecord(data);
 
   await enqueueSourceProcessing({
@@ -107,7 +112,7 @@ export async function createTextOrMarkdownSource(
 ) {
   await getWorkspaceByIdForUser(workspaceId, userId);
 
-  return createAndProcessSource({
+  return createAndProcessSource(userId, {
     workspaceId,
     type: input.type,
     title: input.title,
@@ -149,7 +154,7 @@ export async function uploadPdfSource(
     // Inngest will retry extraction from Cloudinary if upload-time parse fails.
   }
 
-  return createAndProcessSource({
+  return createAndProcessSource(userId, {
     workspaceId,
     type: "PDF",
     title: title?.trim() || file.originalname.replace(/\.pdf$/i, ""),
@@ -184,7 +189,7 @@ export async function importWebsiteSource(
 
   const scraped = await scrapeWebsite(input.url);
 
-  return createAndProcessSource({
+  return createAndProcessSource(userId, {
     workspaceId,
     type: "WEBSITE",
     title: input.title || scraped.title || input.url,
@@ -215,7 +220,7 @@ export async function importYoutubeSource(
 
   const transcript = await fetchYoutubeTranscript(input.url);
 
-  return createAndProcessSource({
+  return createAndProcessSource(userId, {
     workspaceId,
     type: "YOUTUBE",
     title: input.title || `YouTube: ${transcript.videoId}`,
@@ -338,6 +343,7 @@ export async function reprocessSourceForWorkspace(
   userId: string,
 ) {
   const source = await getSourceForWorkspace(workspaceId, sourceId, userId);
+  await assertMinimumCredits(userId, CREDIT_COSTS.sourceProcessed);
 
   await removeSourceFromIndex(workspaceId, sourceId);
 
@@ -376,7 +382,7 @@ export async function importWebSearchSource(
 ) {
   await getWorkspaceByIdForUser(workspaceId, userId);
 
-  return createAndProcessSource({
+  return createAndProcessSource(userId, {
     workspaceId,
     type: "WEBSITE",
     title: input.title,

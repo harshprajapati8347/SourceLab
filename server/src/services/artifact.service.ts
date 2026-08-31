@@ -9,6 +9,8 @@ import {
   updateArtifactRecord,
   type ArtifactRecord,
 } from "../repositories/artifact.repository.js";
+import { CREDIT_COSTS } from "../config/plans.js";
+import { checkAndDeductCredits } from "./credits.service.js";
 import { NotFoundError } from "../types/app-error.js";
 import {
   gatherSourceContext,
@@ -81,6 +83,7 @@ export async function createArtifactForWorkspace(
   input: CreateArtifactInput,
 ) {
   await getWorkspaceByIdForUser(workspaceId, userId);
+  await checkAndDeductCredits(userId, CREDIT_COSTS.artifactGeneration);
 
   const context = await gatherSourceContext(workspaceId, input.sourceIds);
 
