@@ -24,6 +24,7 @@
     "@pinecone-database/pinecone": "^8.2.0",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
+    "prisma": "^7.9.1",
     "@tavily/core": "^0.7.7",
     "ai": "^7.0.66",
     "better-auth": "^1.7.2",
@@ -49,7 +50,6 @@
     "@types/node": "^24.13.3",
     "@types/pg": "^8.21.0",
     "inngest-cli": "^1.41.1",
-    "prisma": "^7.9.1",
     "tsx": "^4.23.12",
     "typescript": "^5.9.2"
   },
