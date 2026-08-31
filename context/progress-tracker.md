@@ -6,9 +6,9 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 
 ## Current Status
 
-**Phase:** Core product feature-complete (auth, workspaces, sources/RAG, chat, learning artifacts, memory); server production deploy path (Docker Hub + GitHub Actions → EC2) is in place.
-**Last completed:** Better Auth 1.7 `Account.issuer` migration — Google sign-in failed in production because the Prisma `account` table lacked the issuer column the 1.7 adapter queries.
-**Next:** Confirm Google OAuth after the issuer migration deploys. See `build-plan.md` for remaining product backlog.
+**Phase:** Auth (Google + email/password), workspaces, sources/RAG, chat, learning artifacts, memory, billing (Stripe Pro) + credits.
+**Last completed:** Plan config — Pro is ₹499/month (INR) with 500 credits per period; Free stays 10 one-time credits. Both tiers list the same features.
+**Next:** Operator setup — Resend domain, Stripe test Product/Price (`STRIPE_PRO_PRICE_ID`), webhook to Express `/api/auth/stripe/webhook`. See `context/billing-and-credits.md`.
 
 ---
 
@@ -16,8 +16,17 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 
 ### Auth
 - [x] Google OAuth via Better Auth (server-mounted at `/api/auth/*`, Prisma adapter)
+- [x] Email + password sign-up/sign-in (verification required; Resend, console fallback)
+- [x] Password reset (request + reset pages)
 - [x] Session-based route protection (`requireAuth()` on protected pages, `requireAuth` middleware on protected API routes)
 - [x] Sign-in / sign-out UI
+
+### Billing and credits
+- [x] Better Auth Stripe plugin — single Pro plan (`STRIPE_PRO_PRICE_ID`), `createCustomerOnSignUp`
+- [x] `/pricing` and `/settings/billing` (checkout + billing portal)
+- [x] `User.credits` / `User.plan` with Inngest lifecycle from Stripe webhooks
+- [x] Atomic credit deduction for chat (0.1), artifacts (1), and successful source processing (1)
+- [x] Credits badge in dashboard, workspace header, chat composer, and generate-artifact dialog
 
 ### Workspaces
 - [x] Create / list / search (debounced, client-side) / update / delete
@@ -79,9 +88,8 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 - Automated tests (unit, integration, or e2e) — none exist in the repo
 - Artifact editing after generation (currently delete + regenerate only)
 - Pagination on the source library (loads the full list per workspace)
-- Any auth provider besides Google
+- OAuth providers other than Google (email/password is implemented)
 - Team/shared/multi-user workspaces
-- Billing or usage limits
 
 ---
 
@@ -96,6 +104,10 @@ _None currently._
 - **Orphan cleanup kept `client/lib/utils.ts`** — it is the live `cn()` helper imported by shadcn primitives and feature components; `client/app/(auth)/layout.tsx` is also live (login page wrapper), not a duplicate.
 - **Tavily and Mem0 remain optional env vars** — documented in `server/.env.example` with comments that missing keys degrade those features to no-ops rather than failing startup.
 - **512 MB EC2 host runs only the API container** — Postgres is managed (Neon/Supabase/RDS); images are built on GitHub Actions and pulled from Docker Hub; a 1 GB swap file is required.
+- **Credits are `Decimal(12, 1)` on `User`** — chat costs 0.1; artifacts and processed sources cost 1. No ledger table.
+- **Pro is ₹499/month INR, 500 credits per period** — Free is 10 credits one-time. Both tiers have the same product surface; usage is gated on credits, not `plan === "pro"`.
+- **Pro cancellation stays Pro until Stripe deletes the subscription** — `User.plan` flips to `free` only then; leftover credits are kept.
+- **Stripe webhooks must hit Express `:8080` (or the API host)** — not the Next.js rewrite — so signature verification sees the raw body.
 
 ## Notes
 

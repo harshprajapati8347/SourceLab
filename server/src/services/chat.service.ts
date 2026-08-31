@@ -56,6 +56,8 @@ import {
   searchWeb,
   type TavilySearchResponse,
 } from "../lib/tavily.js";
+import { CREDIT_COSTS } from "../config/plans.js";
+import { checkAndDeductCredits } from "./credits.service.js";
 import { NotFoundError, ValidationError } from "../types/app-error.js";
 import {
   buildConversationTitle,
@@ -211,6 +213,7 @@ async function resolveConversation(
  * @returns Writes UI message stream to `res`; sets `X-Conversation-Id` header
  * @throws {ValidationError} When no user message text is present
  * @throws {NotFoundError} When conversation or workspace is not found
+ * @throws {PaymentRequiredError} When the user has fewer than 0.1 credits
  *
  *
  */
@@ -242,6 +245,8 @@ export async function streamWorkspaceChat(
     input.conversationId,
     userText,
   );
+
+  await checkAndDeductCredits(userId, CREDIT_COSTS.chatMessage);
 
   await createMessageRecord({
     conversationId: conversation.id,

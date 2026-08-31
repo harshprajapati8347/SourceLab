@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { authRoutes, getSession } from "@/features/auth";
+import { billingRoutes } from "@/features/billing/lib/routes";
 
 export default async function HomePage() {
   const session = await getSession();
@@ -19,9 +20,18 @@ export default async function HomePage() {
         <p className="text-muted-foreground">
           Sign in to start chatting with your documents.
         </p>
-        <Button nativeButton={false} render={<Link href={authRoutes.login} />}>
-          Get started
-        </Button>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Button nativeButton={false} render={<Link href={authRoutes.login} />}>
+            Get started
+          </Button>
+          <Button
+            nativeButton={false}
+            variant="outline"
+            render={<Link href={billingRoutes.pricing} />}
+          >
+            See pricing
+          </Button>
+        </div>
       </div>
     </div>
   );

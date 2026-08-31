@@ -90,8 +90,12 @@ Generated shadcn/ui components (style `base-rhea`, built on `@base-ui/react`, ic
 ### `features/auth/components/`
 | Component | Description |
 | --- | --- |
-| `LoginForm` (`login-form.tsx`) | Card with a single "Continue with Google" button calling `signIn.social`; shows loading spinner and inline error text |
+| `LoginForm` (`login-form.tsx`) | Card with Google OAuth plus email/password fields (`Label` + `Input`), inline error, links to signup and forgot-password |
+| `SignupForm` (`signup-form.tsx`) | Same card pattern; name/email/password/confirm; Google; post-submit “check your email” state |
+| `ForgotPasswordForm` (`forgot-password-form.tsx`) | Email field + generic success copy (does not leak whether the account exists) |
+| `ResetPasswordForm` (`reset-password-form.tsx`) | New password + confirm; reads `token` from the query string |
 | `SignOutButton` (`sign-out-button.tsx`) | Button that calls `signOut` and redirects to login |
+| `GoogleIcon` (`google-icon.tsx`) | Brand SVG for Google buttons (hardcoded hex fills are a logo exception) |
 
 ### `features/workspaces/components/`
 | Component | Description |
@@ -148,6 +152,68 @@ Generated shadcn/ui components (style `base-rhea`, built on `@base-ui/react`, ic
 | --- | --- |
 | `MemorySettings` (`memory-settings.tsx`) | `/settings/memory` page — lists memories with source (Manual/Learned) and category badges, add/edit/delete |
 | `MemoryFormDialog` (`memory-form-dialog.tsx`) | Create/edit dialog for a single memory's text |
+
+### `features/billing/components/`
+| Component | Description |
+| --- | --- |
+| `BillingSettings` (`billing-settings.tsx`) | `/settings/billing` — same settings shell as Memory (`max-w-3xl`, back to dashboard); plan `Badge`, remaining credits, Upgrade / Manage billing |
+| `PricingPage` (`pricing-page.tsx`) | Public `/pricing` — two `Card`s (`rounded-3xl`); Pro uses `border-primary`; Free vs Pro CTAs |
+| `CreditsBadge` (`credits-badge.tsx`) | Outline `Button` `rounded-full` linking to billing; shows remaining credits |
+
+### CreditsBadge
+
+File: `client/features/billing/components/credits-badge.tsx`
+Last updated: 2026-08-29
+
+| Property | Class |
+| --- | --- |
+| Background | Button `variant="outline"` |
+| Border radius | `rounded-full` |
+| Text — primary | default button text |
+| Spacing | Button `size="sm"` |
+| Hover state | outline button hover |
+| Shadow | none |
+| Accent usage | none |
+
+**Pattern notes:** Pill control like source-library filters. Links to `/settings/billing`. Do not use a `Progress` bar — after a Pro downgrade remaining credits can exceed the Free allowance.
+
+### BillingSettings / MemorySettings page shell
+
+File: `client/features/billing/components/billing-settings.tsx`
+Last updated: 2026-08-29
+
+| Property | Class |
+| --- | --- |
+| Background | page `bg` default; content `Card` |
+| Border | `Card` default border |
+| Border radius | card default (`rounded-2xl` / design system) |
+| Text — primary | `font-heading text-2xl font-semibold` on `h1` |
+| Text — secondary | `text-sm text-muted-foreground` |
+| Spacing | `mx-auto max-w-3xl … p-6 md:p-10`, header `gap-8` |
+| Hover state | ghost back button |
+| Shadow | none |
+| Accent usage | plan `Badge` default vs `secondary` |
+
+**Pattern notes:** Match `MemorySettings` — ghost back `Button` + `Link` to dashboard, lucide title icon, `Card` for the main block. Destructive/error copy is `text-sm text-destructive`.
+
+### PricingPage cards
+
+File: `client/features/billing/components/pricing-page.tsx`
+Last updated: 2026-08-29
+
+| Property | Class |
+| --- | --- |
+| Background | `Card` |
+| Border | default; featured Pro `border-primary` |
+| Border radius | `rounded-3xl` |
+| Text — primary | `font-heading` title and price |
+| Text — secondary | `CardDescription`, `text-muted-foreground` on `/month` |
+| Spacing | `max-w-5xl`, `p-6 md:p-10`, `gap-6` grid |
+| Hover state | none on the card itself |
+| Shadow | featured `shadow-sm` |
+| Accent usage | `text-primary` on feature check icons; `border-primary` on Pro |
+
+**Pattern notes:** Two-up grid of cards, not a table. Check rows use `CheckIcon` + `text-primary`. Do not introduce a third tier card.
 
 ---
 

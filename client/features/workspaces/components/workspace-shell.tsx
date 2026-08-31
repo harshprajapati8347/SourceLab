@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { learnRoutes } from "@/features/learn";
 import { SignOutButton } from "@/features/auth/components/sign-out-button";
+import { CreditsBadge } from "@/features/billing";
 import {
   AddSourceDialog,
   SourceSidebarList,
@@ -160,6 +161,7 @@ export function WorkspaceShell({ workspace, children }: WorkspaceShellProps) {
             Add source
           </Button>
           <WorkspaceHeaderActions workspace={workspace} />
+          <CreditsBadge />
           <SignOutButton />
         </header>
 

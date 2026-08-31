@@ -42,6 +42,13 @@ export function findWorkspaceByIdAndUserId(
   });
 }
 
+export function findUserIdByWorkspaceId(workspaceId: string) {
+  return prisma.workspace.findUnique({
+    where: { id: workspaceId },
+    select: { userId: true },
+  });
+}
+
 export function createWorkspaceRecord(
   userId: string,
   data: CreateWorkspaceInput,

@@ -36,6 +36,9 @@ import {
   updateSourceRecord,
   type SourceRecord,
 } from "../repositories/source.repository.js";
+import { findUserIdByWorkspaceId } from "../repositories/workspace.repository.js";
+import { CREDIT_COSTS } from "../config/plans.js";
+import { checkAndDeductCredits } from "./credits.service.js";
 
 /** Shape of JSON stored on a source's `metadata` column. */
 type SourceMetadata = {
@@ -275,6 +278,13 @@ export async function embedAndIndexSource(
   }
 
   await upsertSourceVectors(source.workspaceId, records);
+
+  const owner = await findUserIdByWorkspaceId(source.workspaceId);
+  if (!owner) {
+    throw new Error("Workspace not found for source");
+  }
+
+  await checkAndDeductCredits(owner.userId, CREDIT_COSTS.sourceProcessed);
 
   const metadata =
     source.metadata &&

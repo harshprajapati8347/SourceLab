@@ -32,17 +32,19 @@ export const auth = betterAuth({
   secret: process.env.BETTER_AUTH_SECRET,
   trustedOrigins: [clientUrl],
   database: prismaAdapter(prisma, { provider: "postgresql" }),
+  emailAndPassword: { enabled: true, requireEmailVerification: true },
   socialProviders: {
     google: { clientId: process.env.GOOGLE_CLIENT_ID!, clientSecret: process.env.GOOGLE_CLIENT_SECRET! },
   },
+  plugins: [stripe({ /* Pro plan from STRIPE_PRO_PRICE_ID; skipped if Stripe env is missing */ })],
 });
 ```
 
-- Mounted once in `server/src/index.ts`: `app.all("/api/auth/{*any}", toNodeHandler(auth))`, **before** `express.json()`.
+- Mounted once in `server/src/index.ts`: `app.all("/api/auth/{*any}", toNodeHandler(auth))`, **before** `express.json()` (required for Stripe webhook signatures).
 - Session check in middleware: `auth.api.getSession({ headers: fromNodeHeaders(req.headers) })` → attach to `req.session` (typed via `server/src/types/express.d.ts`).
-- Only Google is configured as a social provider — don't assume other providers exist.
+- Google social provider plus email/password. Stripe plugin: `@better-auth/stripe` (server + client). See `context/billing-and-credits.md`.
 - Better Auth 1.7 requires `Account.issuer`. Google accounts use `https://accounts.google.com`. Schema + unique `(issuer, accountId)` live in `prisma/schema.prisma`; do not drop that column.
-- Client side uses `better-auth/react`'s `createAuthClient()` with no baseURL override (same-origin via Next.js proxy/CORS) — `signIn.social({ provider: "google", callbackURL })`, `signOut()`, `useSession()`.
+- Client side uses `better-auth/react`'s `createAuthClient()` plus `stripeClient({ subscription: true })` — `signIn.social`, `signIn.email`, `signUp.email`, `signOut()`, `useSession()`, `subscription.upgrade` / `billingPortal`.
 
 ### Express 5 (`express`)
 
@@ -71,7 +73,7 @@ export const functions = [processSource, generateArtifact, summarizeConversation
 
 - Served at `/api/inngest` via `serve({ client: inngest, functions })` (`inngest/express`) in `server/src/index.ts`.
 - Local dev: run `pnpm inngest:dev` (or `npx inngest-cli@latest dev`) alongside `pnpm dev`; `INNGEST_DEV=1` in `.env` enables dev mode.
-- Events are triggered with `inngest.send({ name: "...", data: {...} })` from services (e.g. after creating a source, after creating an artifact, when the summary interval is hit) — never call the pipeline functions directly from a controller.
+- Events are triggered with `inngest.send({ name: "...", data: {...} })` from services (e.g. after creating a source, after creating an artifact, when the summary interval is hit, from Stripe billing hooks) — never call the pipeline functions directly from a controller.
 - Each `step.run(name, fn)` should be safely retryable; wrap the whole handler in `try/catch` when a failure needs to update a status field (see `processSource`'s `mark-failed` step).
 
 ### AI SDK — `ai` + `@ai-sdk/openai` (server-side generation/streaming)
@@ -177,7 +179,17 @@ return result.output;
 
 ### `better-auth/react`
 
-- `createAuthClient()` with no config (relies on same-origin/proxying); re-exports `signIn`, `signOut`, `useSession` from the created client instance (`features/auth/lib/auth-client.ts`).
+- `createAuthClient({ plugins: [stripeClient({ subscription: true })] })`; re-exports `signIn`, `signUp`, `signOut`, `useSession`, `requestPasswordReset`, `resetPassword` from the created client (`features/auth/lib/auth-client.ts`).
+
+### Resend (`resend`) — server transactional email
+
+- Wrapper: `server/src/lib/email.ts`. Used only for Better Auth verification and password-reset emails.
+- If `RESEND_API_KEY` or `RESEND_FROM_EMAIL` is missing, the email body (including the action URL) is logged instead of sent.
+
+### Stripe (`stripe` + `@better-auth/stripe`)
+
+- Server plugin in `lib/auth.ts`; SDK client in `lib/stripe.ts`. Do not create Checkout Sessions by hand — use `authClient.subscription.upgrade` / `billingPortal`.
+- Webhook path: `/api/auth/stripe/webhook` on Express. See `context/billing-and-credits.md`.
 
 ### shadcn/ui on `@base-ui/react` (not Radix)
 

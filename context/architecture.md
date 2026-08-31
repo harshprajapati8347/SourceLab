@@ -14,7 +14,7 @@
 | Mind maps             | `@xyflow/react`                                            | Interactive node/edge mind map viewer |
 | Dark mode             | `next-themes`                                              | Theme provider + toggle |
 | Server framework      | Express 5 (ESM, TypeScript, `tsx` for dev)                 | REST API |
-| Auth (server)         | `better-auth` + `better-auth/adapters/prisma`              | Google OAuth, session issuance, mounted at `/api/auth/*` |
+| Auth (server)         | `better-auth` + `better-auth/adapters/prisma` + `@better-auth/stripe` | Google OAuth, email/password, Stripe subscriptions, mounted at `/api/auth/*` |
 | ORM / DB              | Prisma 7 (`@prisma/client`, `@prisma/adapter-pg`) + PostgreSQL | Relational data: users, workspaces, sources, chunks, conversations, messages, artifacts |
 | Vector store          | Pinecone (`@pinecone-database/pinecone`)                    | RAG embeddings, one namespace per workspace |
 | Embeddings + chat LLM | OpenAI (`openai` SDK for embeddings, `@ai-sdk/openai` for chat/generation) | `text-embedding-3-small` embeddings, `gpt-4o-mini`/`gpt-4o` chat |
@@ -45,10 +45,15 @@
 │   │   ├── page.tsx               → Homepage — redirects to dashboard or shows sign-in CTA
 │   │   ├── globals.css            → Tailwind v4 theme tokens (CSS variables)
 │   │   ├── (auth)/
-│   │   │   └── login/page.tsx     → Login page (renders LoginForm)
+│   │   │   ├── login/page.tsx     → LoginForm (Google + email)
+│   │   │   ├── signup/page.tsx
+│   │   │   ├── forgot-password/page.tsx
+│   │   │   └── reset-password/page.tsx
+│   │   ├── pricing/page.tsx       → Public Free vs Pro
 │   │   └── (protected)/
 │   │       ├── dashboard/page.tsx
 │   │       ├── settings/memory/page.tsx
+│   │       ├── settings/billing/page.tsx
 │   │       └── workspace/[id]/
 │   │           ├── page.tsx                       → Chat
 │   │           ├── learn/page.tsx                 → Learn hub
@@ -57,7 +62,8 @@
 │   │           ├── sources/[sourceId]/page.tsx    → Source detail
 │   │           └── settings/page.tsx              → Workspace settings
 │   ├── features/                  → Feature-based modules (primary organizational unit)
-│   │   ├── auth/                  → login form, sign-out button, session hook, auth-client/server, route helpers
+│   │   ├── auth/                  → login/signup/reset forms, sign-out, session hook, auth-client/server
+│   │   ├── billing/               → pricing page, billing settings, credits badge
 │   │   ├── chat/                  → chat UI, citations, conversation hooks, chat-preferences store, markdown export
 │   │   ├── learn/                 → artifact hub, generate dialog, per-type viewers
 │   │   ├── memory/                → memory settings page, form dialog, hooks
@@ -187,7 +193,14 @@ saves it on Conversation, and feeds the last 16 messages to Mem0 for long-term l
 
 ## Database Schema (Prisma / PostgreSQL)
 
-Auth tables (`user`, `session`, `account`, `verification`) are owned by Better Auth's Prisma adapter — do not hand-edit their shape without checking Better Auth's migration expectations. Better Auth 1.7 requires `account.issuer` and a unique `(issuer, accountId)` key (Google OIDC issuer is `https://accounts.google.com`).
+Auth tables (`user`, `session`, `account`, `verification`, `subscription`) are owned by Better Auth / the Stripe plugin — do not hand-edit their plugin-owned columns without checking Better Auth. `User.credits` and `User.plan` are **ours** (usage gate). See `context/billing-and-credits.md`.
+
+### `user` (extra columns)
+| Column | Type | Notes |
+| --- | --- | --- |
+| credits | Decimal(12,1) | Default 10. Chat 0.1, artifact/source 1. |
+| plan | String | `"free"` \| `"pro"` |
+| stripeCustomerId | String? | Stripe plugin |
 
 ### `workspace`
 | Column | Type | Notes |
@@ -266,7 +279,8 @@ Auth tables (`user`, `session`, `account`, `verification`) are owned by Better A
 
 ## Authentication
 
-- Provider: Google OAuth only, via Better Auth
+- Providers: Google OAuth and email/password, via Better Auth (`requireEmailVerification` for credentials)
+- Stripe plugin webhook: `/api/auth/stripe/webhook` on the **Express** host
 - Better Auth is mounted on the **server** at `app.all("/api/auth/{*any}", toNodeHandler(auth))` — the client's `better-auth/react` client talks directly to this server route
 - Sessions are cookie-based; the client always calls `fetch` with `credentials: "include"` (`shared/lib/api.ts`)
 - Server routes: `requireAuth` middleware (`server/src/middleware/require-auth.middleware.ts`) validates the session via `auth.api.getSession()` and attaches it to `req.session`; every workspace-scoped and memory route requires it

@@ -158,6 +158,8 @@ Never hardcode a key, URL, or secret. Current variables:
 | `PINECONE_API_KEY` / `PINECONE_INDEX` | `lib/pinecone.ts` |
 | `TAVILY_API_KEY` | `lib/tavily.ts` (chat web search tool — feature no-ops without it) |
 | `MEM0_API_KEY` | `lib/mem0.ts` (memory features no-op/return empty without it) |
+| `RESEND_API_KEY` / `RESEND_FROM_EMAIL` | `lib/email.ts` (verification + password reset; logs the link if unset) |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `STRIPE_PRO_PRICE_ID` | Better Auth Stripe plugin (`lib/auth.ts`). Plugin skipped if any is missing. |
 
 **`client/.env`**
 | Variable | Used In |

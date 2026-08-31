@@ -22,9 +22,14 @@ Reading through long documents, PDFs, articles, and videos to find or remember s
 
 ```
 /                                          → Homepage (redirects to /dashboard if signed in)
-/login                                     → Google OAuth sign-in
+/login                                     → Google + email/password sign-in
+/signup                                    → Email sign-up (verification required) or Google
+/forgot-password                           → Request password reset
+/reset-password                            → Set a new password from email token
+/pricing                                   → Public Free vs Pro pricing
 /dashboard                                 → Workspace list ("Your notebooks") — search, create, edit, delete
 /settings/memory                           → Personal Mem0 memory management (cross-workspace)
+/settings/billing                          → Plan, credits, Upgrade to Pro, Manage billing
 /workspace/[id]                            → Workspace chat (default view when opening a workspace)
 /workspace/[id]/sources                    → Source library (grid/list, filter, search, bulk actions)
 /workspace/[id]/sources/[sourceId]         → Source detail (extracted content preview, status, chunk count)
@@ -48,7 +53,8 @@ Two distinct navigation contexts:
 
 ### Authentication
 
-- Google OAuth only, via Better Auth (`better-auth` + `better-auth/react`)
+- Google OAuth and email/password, via Better Auth (`better-auth` + `better-auth/react`)
+- Email/password requires verification (Resend; links logged to the console if unset)
 - Session cookies are shared between the Next.js client (`localhost:3000`) and the Express API (`localhost:8080`) via CORS with `credentials: true`
 - Server-side pages call `requireAuth()` and redirect to `/login` if there is no session; the login page calls `unauth()` to redirect signed-in users away
 
@@ -107,7 +113,8 @@ The source library UI polls sources with pending/processing status every 3 secon
 
 ## Features In Scope
 
-- Google OAuth sign-in via Better Auth
+- Google OAuth and email/password sign-in via Better Auth
+- Stripe Pro billing (`@better-auth/stripe`) and a Postgres credit counter (see `context/billing-and-credits.md`)
 - Workspace CRUD (create, list/search, update settings, delete with cascading cleanup)
 - Five source ingestion paths: text, markdown, PDF upload, website scrape, YouTube transcript (+ web-search-to-source)
 - Background source processing pipeline: extraction → chunking → embedding → Pinecone indexing, with status tracking and reprocessing
@@ -122,7 +129,6 @@ The source library UI polls sources with pending/processing status every 3 secon
 
 - Any OAuth provider other than Google
 - Team/multi-user or shared workspaces (workspaces are single-owner)
-- Billing, subscriptions, or usage limits
 - Admin dashboard or moderation tooling
 - Offline mode
 - Editing generated artifact content after creation (artifacts are regenerate-or-delete, not editable)

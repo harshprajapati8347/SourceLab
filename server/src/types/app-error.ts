@@ -36,3 +36,13 @@ export class ConflictError extends AppError {
     this.name = "ConflictError";
   }
 }
+
+export class PaymentRequiredError extends AppError {
+  constructor(
+    message = "You're out of credits. Upgrade to Pro.",
+    details: unknown = { code: "INSUFFICIENT_CREDITS" },
+  ) {
+    super(402, message, details);
+    this.name = "PaymentRequiredError";
+  }
+}

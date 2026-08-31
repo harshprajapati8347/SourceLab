@@ -49,3 +49,5 @@ There is no automated test suite in the repository. Server production deploy use
 3. **Artifacts are not editable** — once generated, an artifact can only be deleted and regenerated, not edited in place.
 4. **`recharts` is installed and wired into `components/ui/chart.tsx` but unused** — either a dashboard/analytics view was planned and not yet built, or the dependency is dead weight. Confirm intent before adding new chart UI or removing the dependency.
 5. **Toast primitive (`components/ui/toast.tsx`) exists but isn't connected to a global provider/toaster** — errors currently surface as inline text; decide whether toasts are intended.
+
+Billing, email/password, and credits shipped — see `context/billing-and-credits.md`.

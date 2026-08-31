@@ -23,6 +23,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { SignOutButton } from "@/features/auth/components/sign-out-button";
 import { memoryRoutes } from "@/features/memory";
+import { billingRoutes, CreditsBadge } from "@/features/billing";
 import { ApiError } from "@/shared/lib/api";
 import { useDebouncedValue } from "@/shared/hooks/use-debounced-value";
 import {
@@ -114,6 +115,16 @@ export function DashboardHome({ userName }: DashboardHomeProps) {
           </Link>
 
           <div className="flex items-center gap-1.5 sm:gap-2">
+            <CreditsBadge className="hidden sm:inline-flex" />
+            <Button
+              nativeButton={false}
+              variant="ghost"
+              size="sm"
+              className="hidden sm:inline-flex"
+              render={<Link href={billingRoutes.settings} />}
+            >
+              Billing
+            </Button>
             <Button
               nativeButton={false}
               variant="ghost"
