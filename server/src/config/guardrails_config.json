@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "pre_flight": {
+    "version": 1,
+    "guardrails": [
+      {
+        "name": "Contains PII",
+        "config": {
+          "block": true,
+          "detect_encoded_pii": false,
+          "entities": [
+            "CREDIT_CARD",
+            "CVV",
+            "IBAN_CODE",
+            "BIC_SWIFT",
+            "CRYPTO"
+          ]
+        }
+      },
+      {
+        "name": "Moderation",
+        "config": {
+          "categories": [
+            "sexual",
+            "sexual/minors",
+            "hate",
+            "hate/threatening",
+            "harassment",
+            "harassment/threatening",
+            "self-harm",
+            "self-harm/intent",
+            "self-harm/instructions",
+            "violence",
+            "violence/graphic",
+            "illicit",
+            "illicit/violent"
+          ]
+        }
+      }
+    ]
+  },
+  "input": {
+    "version": 1,
+    "guardrails": [
+      {
+        "name": "Jailbreak",
+        "config": {
+          "confidence_threshold": 0.7,
+          "model": "gpt-4.1-mini",
+          "include_reasoning": false
+        }
+      },
+      {
+        "name": "Off Topic Prompts",
+        "config": {
+          "confidence_threshold": 0.7,
+          "model": "gpt-4.1-mini",
+          "system_prompt_details": "SourceLab is an AI-powered RAG knowledge and research workspace. Keep conversations focused on the user's workspace sources and knowledge, including PDFs, websites, YouTube content, text, web-search imports, document understanding, research, summarization, analysis, explanation, comparison, and learning. Allow questions that meaningfully relate to the user's available knowledge or research workflow, even when the exact answer is not explicitly present in the sources. Mark requests as off-topic when they have no meaningful relationship to the user's workspace, knowledge, research, or learning purpose. Evaluate user intent and context rather than matching keywords alone.",
+          "include_reasoning": false
+        }
+      }
+    ]
+  },
+  "output": {
+    "version": 1,
+    "guardrails": []
+  }
+}

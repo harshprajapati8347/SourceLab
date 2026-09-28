@@ -7,7 +7,7 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 ## Current Status
 
 **Phase:** Auth (Google + email/password), workspaces, sources/RAG, chat, learning artifacts, memory, billing (Stripe Pro) + credits.
-**Last completed:** Plan config — Pro is ₹499/month (INR) with 500 credits per period; Free stays 10 one-time credits. Both tiers list the same features.
+**Last completed:** Chat input guardrails — harmful, out-of-scope, and financial-PII messages are rejected before credits, persistence, RAG, or the model stream.
 **Next:** Operator setup — Resend domain, Stripe test Product/Price (`STRIPE_PRO_PRICE_ID`), webhook to Express `/api/auth/stripe/webhook`. See `context/billing-and-credits.md`.
 
 ---
@@ -53,6 +53,7 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 - [x] Mem0 long-term memory: recalled into chat context, auto-learned from conversations
 - [x] Conversation delete, "new chat", markdown export
 - [x] Deep-link into chat with a pre-filled question (`?ask=...`, used by the mind map viewer's "ask in chat")
+- [x] Input guardrails (`@openai/guardrails`) before RAG: moderation, jailbreak, off-topic, and blocking PII for payment credentials
 
 ### Learning Artifacts ("Learn")
 - [x] Six types: Summary, Takeaways, Flashcards, Quiz, Mind Map, Report
@@ -108,6 +109,7 @@ _None currently._
 - **Pro is ₹499/month INR, 500 credits per period** — Free is 10 credits one-time. Both tiers have the same product surface; usage is gated on credits, not `plan === "pro"`.
 - **Pro cancellation stays Pro until Stripe deletes the subscription** — `User.plan` flips to `free` only then; leftover credits are kept.
 - **Stripe webhooks must hit Express `:8080` (or the API host)** — not the Next.js rewrite — so signature verification sees the raw body.
+- **Chat input guardrails sit in front of `streamText`** — `@openai/guardrails` checks the latest user message only. A block returns JSON 400 and does not create a conversation, charge credits, or start the AI SDK stream. PII blocking is limited to payment credentials (`CREDIT_CARD`, `CVV`, `IBAN_CODE`, `BIC_SWIFT`, `CRYPTO`).
 
 ## Notes
 

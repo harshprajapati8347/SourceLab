@@ -121,12 +121,19 @@ export function WorkspaceChat({
             credentials: "include",
           });
 
-          if (response.status === 402) {
-            void queryClient.invalidateQueries({ queryKey: billingKeys.all });
+          if (!response.ok) {
+            if (response.status === 402) {
+              void queryClient.invalidateQueries({ queryKey: billingKeys.all });
+            }
             const payload = (await response.json().catch(() => null)) as {
               error?: string;
             } | null;
-            throw new Error(payload?.error ?? INSUFFICIENT_CREDITS_MESSAGE);
+            throw new Error(
+              payload?.error ??
+                (response.status === 402
+                  ? INSUFFICIENT_CREDITS_MESSAGE
+                  : "Something went wrong. Please try again."),
+            );
           }
 
           const newConversationId = response.headers.get("X-Conversation-Id");

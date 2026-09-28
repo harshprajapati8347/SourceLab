@@ -5,6 +5,7 @@
  *
  * ```
  * User message
+ *   → input guardrails
  *   → save to DB
  *   → RAG retrieval + Mem0 memories
  *   → streamText (AI SDK) with optional web search tool
@@ -13,6 +14,7 @@
  * ```
  */
 
+import { GuardrailTripwireTriggered } from "@openai/guardrails";
 import { openai } from "@ai-sdk/openai";
 import type { Response } from "express";
 import { z } from "zod";
@@ -57,6 +59,10 @@ import {
   type TavilySearchResponse,
 } from "../lib/tavily.js";
 import { CREDIT_COSTS } from "../config/plans.js";
+import {
+  assertChatInputAllowed,
+  toInputBlockedError,
+} from "../lib/input-guardrails.js";
 import { checkAndDeductCredits } from "./credits.service.js";
 import { NotFoundError, ValidationError } from "../types/app-error.js";
 import {
@@ -200,8 +206,8 @@ async function resolveConversation(
  * Main RAG chat endpoint: streams an AI reply with workspace context and optional web search.
  *
  * **Pipeline:**
- * 1. Validate user message and resolve/create conversation
- * 2. Save user message to Postgres
+ * 1. Validate user message and run input guardrails
+ * 2. Resolve/create conversation and save the user message
  * 3. Parallel: Pinecone RAG retrieval + Mem0 memory search
  * 4. Build system prompt and stream model response via AI SDK
  * 5. On finish: save assistant message, citations, title, summary job, Mem0 learning
@@ -212,6 +218,7 @@ async function resolveConversation(
  * @param input - Client chat payload from `useChat`
  * @returns Writes UI message stream to `res`; sets `X-Conversation-Id` header
  * @throws {ValidationError} When no user message text is present
+ * @throws {InputBlockedError} When input guardrails reject the user message
  * @throws {NotFoundError} When conversation or workspace is not found
  * @throws {PaymentRequiredError} When the user has fewer than 0.1 credits
  *
@@ -238,6 +245,15 @@ export async function streamWorkspaceChat(
   const userText = getLastUserMessageText(input.messages);
   if (!userText) {
     throw new ValidationError("A user message is required");
+  }
+
+  try {
+    await assertChatInputAllowed(userText);
+  } catch (error) {
+    if (error instanceof GuardrailTripwireTriggered) {
+      throw toInputBlockedError(error);
+    }
+    throw error;
   }
 
   const conversation = await resolveConversation(

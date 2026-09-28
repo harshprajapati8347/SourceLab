@@ -46,3 +46,13 @@ export class PaymentRequiredError extends AppError {
     this.name = "PaymentRequiredError";
   }
 }
+
+export class InputBlockedError extends AppError {
+  constructor(
+    message: string,
+    details: { code: "INPUT_BLOCKED"; guardrail: string },
+  ) {
+    super(400, message, details);
+    this.name = "InputBlockedError";
+  }
+}

@@ -20,6 +20,9 @@ importers:
       '@mendable/firecrawl-js':
         specifier: ^4.32.2
         version: 4.32.2
+      '@openai/guardrails':
+        specifier: ^0.3.0
+        version: 0.3.0(undici@7.29.0)(ws@8.22.0)
       '@pinecone-database/pinecone':
         specifier: ^8.2.0
         version: 8.2.0
@@ -55,16 +58,19 @@ importers:
         version: 4.18.0(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(express@5.2.1)(react@19.2.8)(typescript@5.9.2)(zod@4.4.3)
       mem0ai:
         specifier: ^3.1.6
-        version: 3.1.6(@cloudflare/workers-types@4.20260702.1)(@pinecone-database/pinecone@8.2.0)(@types/jest@29.5.14)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(compromise@14.16.0)(mongodb@7.5.0)(mysql2@3.15.3)(natural@8.1.1(@opentelemetry/api@1.9.1))(pg@8.23.0)
+        version: 3.1.6(@cloudflare/workers-types@4.20260702.1)(@pinecone-database/pinecone@8.2.0)(@types/jest@29.5.14)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(compromise@14.16.0)(mongodb@7.5.0)(mysql2@3.15.3)(natural@8.1.1(@opentelemetry/api@1.9.1))(pg@8.23.0)(ws@8.22.0)
       multer:
         specifier: ^2.2.0
         version: 2.2.0
       openai:
         specifier: ^7.4.0
-        version: 7.4.0(zod@4.4.3)
+        version: 7.4.0(ws@8.22.0)(zod@4.4.3)
       pg:
         specifier: ^8.23.0
         version: 8.23.0
+      prisma:
+        specifier: ^7.9.1
+        version: 7.9.1(@types/react@19.2.18)(better-sqlite3@12.11.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@5.9.2)
       resend:
         specifier: ^6.25.0
         version: 6.25.0
@@ -99,9 +105,6 @@ importers:
       inngest-cli:
         specifier: ^1.41.1
         version: 1.41.1
-      prisma:
-        specifier: ^7.9.1
-        version: 7.9.1(@types/react@19.2.18)(better-sqlite3@12.11.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@5.9.2)
       tsx:
         specifier: ^4.23.12
         version: 4.23.12
@@ -449,6 +452,14 @@ packages:
     resolution: {integrity: sha512-hrN0Ayqi5mHVUAN7nhBFoCnJdwt1GHKoVNXZfNPbPOORo49aZjcyPp8u2RApcKjDFjuWBPY6M7c1aRglU1r7Hg==}
     engines: {node: '>=22.0.0'}
 
+  '@modelcontextprotocol/client@2.1.0':
+    resolution: {integrity: sha512-mDVhoy5WjDb0U+4dQPzLcciC2erSex/GRVQqnoZdiuMoE3YiTZdiS7ezNcFwX4XEOWOaj7jZr0kLYnILnL8orA==}
+    engines: {node: '>=20'}
+
+  '@modelcontextprotocol/core@2.1.0':
+    resolution: {integrity: sha512-YdFj5gMRHr0gYNAhTbQDgjLHiEJdIAUYxomhKseUNye7ZGlISQmUoLh2sveFFCiQ7j2YMffT1kgSND0FSfIFjQ==}
+    engines: {node: '>=20'}
+
   '@mongodb-js/saslprep@1.4.13':
     resolution: {integrity: sha512-E3Sv4eCYAlKYUTx8S3ioQcDUscOif+8zZ5OnW1IzJ+Tt+EO+ke8mn+Y3FX6N1H79picwbdOavVOb1jPi2EOyrg==}
 
@@ -459,6 +470,34 @@ packages:
   '@noble/hashes@2.3.0':
     resolution: {integrity: sha512-oN+QwyX7VSHotibwubG3kpzbwKrfnyR6OOO+3Nk/53ADL7FmgHHz4TgrbaYKvvOw09u6QTx0oiH1cNCIOuN0CQ==}
     engines: {node: '>= 20.19.0'}
+
+  '@openai/agents-core@0.17.2':
+    resolution: {integrity: sha512-8T5Q5itZSwByPCV6KHpdiKrJ5Ehjhq5pWX+Iq0vLHcY8/TCHt3yAZl9b1dgdcDbfd7UOkPxrBtO3yc87mTnezQ==}
+    peerDependencies:
+      zod: ^4.0.0
+    peerDependenciesMeta:
+      zod:
+        optional: true
+
+  '@openai/agents-openai@0.17.2':
+    resolution: {integrity: sha512-zORIq6d0tc6Vyy3CL6sVb9fkeWV8sJmD8+5kv94BaDkSdi2+2kSorgb3n+t0MTuZO4Q19ILe7JvFOcFBokPbjQ==}
+    peerDependencies:
+      zod: ^4.0.0
+
+  '@openai/agents-realtime@0.17.2':
+    resolution: {integrity: sha512-ftIkH5pDJNnKOX/t8ormvtcN0PnbpIKzvWJImp4mdOavl6u7GFYQ/XIPu1JDsgHMdJFbQwouHDuo3sTpI9ycNA==}
+    peerDependencies:
+      zod: ^4.0.0
+
+  '@openai/agents@0.17.2':
+    resolution: {integrity: sha512-sNf/XcfJ5VPvvouKTc+ununm+laNEF56x2eNM95SM+ULHzNVLkb7rMOSJXjmn7T3Pc2xdQlEUSvGp2auqzGlcw==}
+    peerDependencies:
+      zod: ^4.0.0
+
+  '@openai/guardrails@0.3.0':
+    resolution: {integrity: sha512-EsQq0Vnc9420mj52/iTumI4/OFLl5MZLE9+GcoDmzsgXR5Vh3qACwj8Bb2WRnhFnMTUvOTtKq3pQEe/SUh9s+A==}
+    engines: {node: ^22.13.0 || >=24.0.0}
+    hasBin: true
 
   '@opentelemetry/api-logs@0.203.0':
     resolution: {integrity: sha512-9B9RU0H7Ya1Dx/Rkyc4stuBZSGVQF27WigitInx2QQoj6KUpEFYPKoWjdFTunJYxmXmh17HeBvbMa1EhGyPmqQ==}
@@ -1312,6 +1351,9 @@ packages:
   '@types/whatwg-url@13.0.0':
     resolution: {integrity: sha512-N8WXpbE6Wgri7KUSvrmQcqrMllKZ9uxkYWMt+mCSGwNc0Hsw9VQTW7ApqI4XNrx6/SaM2QQJCzMPDEXE058s+Q==}
 
+  '@types/ws@8.18.1':
+    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
+
   '@types/yargs-parser@21.0.3':
     resolution: {integrity: sha512-I4q9QU9MQv4oEOz4tAHJtNz1cwuLxn2F3xcc2iV5WdqLPpUnj30aUuxt1mAxYTG+oe8CZMV/+6rU4S4gRDzqtQ==}
 
@@ -1888,6 +1930,10 @@ packages:
 
   eventsource-parser@3.1.1:
     resolution: {integrity: sha512-EKN1vKAMcZ8MlYMpaNuxN6R9yakzH6uajHcHVTqWJzvu5pWw9DyhbP35HH8MVBQ+dZjAfDxk+A8NiR9KWaXiyQ==}
+    engines: {node: '>=18.0.0'}
+
+  eventsource@3.0.2:
+    resolution: {integrity: sha512-YolzkJNxsTL3tCJMWFxpxtG2sCjbZ4LQUBUrkdaJK0ub0p6lmJt+2+1SwhKjLc652lpH9L/79Ptez972H9tphw==}
     engines: {node: '>=18.0.0'}
 
   expand-template@2.0.3:
@@ -2591,6 +2637,30 @@ packages:
       zod:
         optional: true
 
+  openai@7.23.0:
+    resolution: {integrity: sha512-0ecOXnFSMNWZq6cUBcTV6Lf93y+fm8BH/+QzFvpoP1UGNOE5pnytRa6HAPGCw+3IS9SIAW7rc1M8yyzN1PiBAQ==}
+    engines: {node: '>=22.0.0'}
+    peerDependencies:
+      '@aws-sdk/credential-provider-node': '>=3.972.0 <4'
+      '@smithy/hash-node': '>=4.3.0 <5'
+      '@smithy/signature-v4': '>=5.4.0 <6'
+      undici: '>=5 <9'
+      ws: ^8.21.0
+      zod: ^3.25 || ^4.0
+    peerDependenciesMeta:
+      '@aws-sdk/credential-provider-node':
+        optional: true
+      '@smithy/hash-node':
+        optional: true
+      '@smithy/signature-v4':
+        optional: true
+      undici:
+        optional: true
+      ws:
+        optional: true
+      zod:
+        optional: true
+
   openai@7.4.0:
     resolution: {integrity: sha512-+C9Muit5x8j9R8ej8ZzVgKcrVDtqFqTy9gxFdov0EItLgU68zrJtF9ZeT0cyqJQW9S3PCJkdFgADtRGquRBtew==}
     engines: {node: '>=22.0.0'}
@@ -2679,6 +2749,10 @@ packages:
   picomatch@2.3.2:
     resolution: {integrity: sha512-V7+vQEJ06Z+c5tSye8S+nHUfI51xoXIXjHQ99cQtKUkQqqO1kO/KCJUfZXuB47h/YBlDhah2H3hdUGXn8ie0oA==}
     engines: {node: '>=8.6'}
+
+  pkce-challenge@5.0.0:
+    resolution: {integrity: sha512-ueGLflrrnvwB3xuo/uGob5pd5FN7l0MsLf0Z87o/UQmRtwjvfylfc9MurIxRAWywCYTgrvpXBcqjV4OfCYGCIQ==}
+    engines: {node: '>=16.20.0'}
 
   pkg-types@2.3.1:
     resolution: {integrity: sha512-y+ichcgc2LrADuhLNAx8DFjVfgz91pRxfZdI3UDhxHvcVEZsenLO+7XaU5vOp0u/7V/wZ+plyuQxtrDlZJ+yeg==}
@@ -3187,6 +3261,18 @@ packages:
   wrappy@1.0.2:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
 
+  ws@8.22.0:
+    resolution: {integrity: sha512-Ydggc987+RO0AnWtZ/7Wq9FtNvcrL1b/RO0ud9mWjUPgDrsAAwQSF51sm2hm1XofbU/4jkpGEsLFsZZxU+1DOg==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
   xtend@4.0.2:
     resolution: {integrity: sha512-LKYU1iAXJXUgAXn9URjiu+MWhyUXHsvfp7mcuYm9dSUKK0/CjtrUwFAxD82/mCWbtLsGjFIad0wIsod4zrTAEQ==}
     engines: {node: '>=0.4'}
@@ -3232,6 +3318,9 @@ packages:
 
   zod@4.4.3:
     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+
+  zod@4.6.5:
+    resolution: {integrity: sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==}
 
 snapshots:
 
@@ -3495,6 +3584,22 @@ snapshots:
       - debug
       - supports-color
 
+  '@modelcontextprotocol/client@2.1.0':
+    dependencies:
+      '@modelcontextprotocol/core': 2.1.0
+      cross-spawn: 7.0.6
+      eventsource: 3.0.2
+      eventsource-parser: 3.1.1
+      jose: 6.2.9
+      pkce-challenge: 5.0.0
+      zod: 4.4.3
+    optional: true
+
+  '@modelcontextprotocol/core@2.1.0':
+    dependencies:
+      zod: 4.4.3
+    optional: true
+
   '@mongodb-js/saslprep@1.4.13':
     dependencies:
       sparse-bitfield: 3.0.3
@@ -3502,6 +3607,81 @@ snapshots:
   '@noble/ciphers@2.3.0': {}
 
   '@noble/hashes@2.3.0': {}
+
+  '@openai/agents-core@0.17.2(ws@8.22.0)(zod@4.6.5)':
+    dependencies:
+      '@standard-schema/spec': 1.1.0
+      debug: 4.4.3
+      openai: 7.4.0(ws@8.22.0)(zod@4.6.5)
+    optionalDependencies:
+      '@modelcontextprotocol/client': 2.1.0
+      zod: 4.6.5
+    transitivePeerDependencies:
+      - '@aws-sdk/credential-provider-node'
+      - '@smithy/hash-node'
+      - '@smithy/signature-v4'
+      - supports-color
+      - ws
+
+  '@openai/agents-openai@0.17.2(ws@8.22.0)(zod@4.6.5)':
+    dependencies:
+      '@openai/agents-core': 0.17.2(ws@8.22.0)(zod@4.6.5)
+      debug: 4.4.3
+      openai: 7.4.0(ws@8.22.0)(zod@4.6.5)
+      zod: 4.6.5
+    transitivePeerDependencies:
+      - '@aws-sdk/credential-provider-node'
+      - '@smithy/hash-node'
+      - '@smithy/signature-v4'
+      - supports-color
+      - ws
+
+  '@openai/agents-realtime@0.17.2(zod@4.6.5)':
+    dependencies:
+      '@openai/agents-core': 0.17.2(ws@8.22.0)(zod@4.6.5)
+      '@types/ws': 8.18.1
+      debug: 4.4.3
+      ws: 8.22.0
+      zod: 4.6.5
+    transitivePeerDependencies:
+      - '@aws-sdk/credential-provider-node'
+      - '@smithy/hash-node'
+      - '@smithy/signature-v4'
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+
+  '@openai/agents@0.17.2(ws@8.22.0)(zod@4.6.5)':
+    dependencies:
+      '@openai/agents-core': 0.17.2(ws@8.22.0)(zod@4.6.5)
+      '@openai/agents-openai': 0.17.2(ws@8.22.0)(zod@4.6.5)
+      '@openai/agents-realtime': 0.17.2(zod@4.6.5)
+      debug: 4.4.3
+      openai: 7.4.0(ws@8.22.0)(zod@4.6.5)
+      zod: 4.6.5
+    transitivePeerDependencies:
+      - '@aws-sdk/credential-provider-node'
+      - '@smithy/hash-node'
+      - '@smithy/signature-v4'
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+      - ws
+
+  '@openai/guardrails@0.3.0(undici@7.29.0)(ws@8.22.0)':
+    dependencies:
+      '@openai/agents': 0.17.2(ws@8.22.0)(zod@4.6.5)
+      openai: 7.23.0(undici@7.29.0)(ws@8.22.0)(zod@4.6.5)
+      zod: 4.6.5
+    transitivePeerDependencies:
+      - '@aws-sdk/credential-provider-node'
+      - '@smithy/hash-node'
+      - '@smithy/signature-v4'
+      - bufferutil
+      - supports-color
+      - undici
+      - utf-8-validate
+      - ws
 
   '@opentelemetry/api-logs@0.203.0':
     dependencies:
@@ -4597,6 +4777,10 @@ snapshots:
     dependencies:
       '@types/webidl-conversions': 7.0.3
 
+  '@types/ws@8.18.1':
+    dependencies:
+      '@types/node': 24.13.3
+
   '@types/yargs-parser@21.0.3': {}
 
   '@types/yargs@17.0.35':
@@ -5175,6 +5359,11 @@ snapshots:
 
   eventsource-parser@3.1.1: {}
 
+  eventsource@3.0.2:
+    dependencies:
+      eventsource-parser: 3.1.1
+    optional: true
+
   expand-template@2.0.3: {}
 
   expect@29.0.0:
@@ -5606,7 +5795,7 @@ snapshots:
 
   media-typer@1.1.1: {}
 
-  mem0ai@3.1.6(@cloudflare/workers-types@4.20260702.1)(@pinecone-database/pinecone@8.2.0)(@types/jest@29.5.14)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(compromise@14.16.0)(mongodb@7.5.0)(mysql2@3.15.3)(natural@8.1.1(@opentelemetry/api@1.9.1))(pg@8.23.0):
+  mem0ai@3.1.6(@cloudflare/workers-types@4.20260702.1)(@pinecone-database/pinecone@8.2.0)(@types/jest@29.5.14)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(compromise@14.16.0)(mongodb@7.5.0)(mysql2@3.15.3)(natural@8.1.1(@opentelemetry/api@1.9.1))(pg@8.23.0)(ws@8.22.0):
     dependencies:
       '@cloudflare/workers-types': 4.20260702.1
       '@types/jest': 29.5.14
@@ -5615,7 +5804,7 @@ snapshots:
       better-sqlite3: 12.11.1
       compromise: 14.16.0
       natural: 8.1.1(@opentelemetry/api@1.9.1)
-      openai: 4.93.0(zod@3.24.1)
+      openai: 4.93.0(ws@8.22.0)(zod@3.24.1)
       pg: 8.23.0
       uuid: 11.1.1
       zod: 3.24.1
@@ -5800,7 +5989,7 @@ snapshots:
     dependencies:
       wrappy: 1.0.2
 
-  openai@4.93.0(zod@3.24.1):
+  openai@4.93.0(ws@8.22.0)(zod@3.24.1):
     dependencies:
       '@types/node': 18.11.18
       '@types/node-fetch': 2.6.13
@@ -5810,13 +5999,26 @@ snapshots:
       formdata-node: 4.4.1
       node-fetch: 2.7.0
     optionalDependencies:
+      ws: 8.22.0
       zod: 3.24.1
     transitivePeerDependencies:
       - encoding
 
-  openai@7.4.0(zod@4.4.3):
+  openai@7.23.0(undici@7.29.0)(ws@8.22.0)(zod@4.6.5):
     optionalDependencies:
+      undici: 7.29.0
+      ws: 8.22.0
+      zod: 4.6.5
+
+  openai@7.4.0(ws@8.22.0)(zod@4.4.3):
+    optionalDependencies:
+      ws: 8.22.0
       zod: 4.4.3
+
+  openai@7.4.0(ws@8.22.0)(zod@4.6.5):
+    optionalDependencies:
+      ws: 8.22.0
+      zod: 4.6.5
 
   package-json-from-dist@1.0.1: {}
 
@@ -5875,6 +6077,9 @@ snapshots:
   picocolors@1.1.1: {}
 
   picomatch@2.3.2: {}
+
+  pkce-challenge@5.0.0:
+    optional: true
 
   pkg-types@2.3.1:
     dependencies:
@@ -6384,6 +6589,8 @@ snapshots:
 
   wrappy@1.0.2: {}
 
+  ws@8.22.0: {}
+
   xtend@4.0.2: {}
 
   y18n@5.0.8: {}
@@ -6420,3 +6627,5 @@ snapshots:
   zod@3.24.1: {}
 
   zod@4.4.3: {}
+
+  zod@4.6.5: {}

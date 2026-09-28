@@ -106,7 +106,18 @@ return result.output;
 
 ### OpenAI SDK (`openai`) — embeddings only
 
-- The raw `openai` SDK is used **only** for embeddings (`server/src/lib/openai.ts`); chat/generation goes through the AI SDK (`@ai-sdk/openai`) instead. Don't mix the two for the same purpose.
+- The raw `openai` SDK is used for embeddings (`server/src/lib/openai.ts`). Chat and artifact generation go through the AI SDK (`@ai-sdk/openai`). Don't send chat completions through the embeddings client.
+- Input guardrails use a separate OpenAI client only for moderation and the jailbreak/off-topic classifiers. See `@openai/guardrails` below.
+
+### `@openai/guardrails` — chat input gate
+
+- Installed on the server. Configuration lives in `server/src/config/guardrails_config.json`.
+- `server/src/lib/input-guardrails.ts` loads that file with `loadPipelineBundles` and runs `pre_flight`, then `input`, via `runGuardrails` before RAG or `streamText`. Output guardrails are empty.
+- A tripwire throws `GuardrailTripwireTriggered`. `streamWorkspaceChat` maps it to `InputBlockedError` (HTTP 400, `{ code: "INPUT_BLOCKED", guardrail }`). The chat transport reads `error` from any non-OK JSON body and shows it in the existing banner.
+- Blocked messages are not saved, not charged, and do not create a conversation.
+- Pre-flight: Moderation, plus Contains PII in blocking mode (`block: true`, `detect_encoded_pii: false`) for `CREDIT_CARD`, `CVV`, `IBAN_CODE`, `BIC_SWIFT`, and `CRYPTO` only. Names, URLs, emails, and dates are not treated as secrets.
+- Input: Jailbreak and Off Topic Prompts (`gpt-4.1-mini`, confidence `0.7`). Both use `OPENAI_API_KEY`. A guardrail execution failure fails the request closed (`raiseGuardrailErrors: true`).
+- `tsc` does not emit the JSON config. `npm run build` copies it to `dist/config` so production (`node dist/index.js`) can load it next to the compiled module.
 - `EMBEDDING_MODEL = "text-embedding-3-small"`, `EMBEDDING_DIMENSIONS = 1536` (must match the Pinecone index dimension). `embedTexts(texts: string[])` batches internally is the caller's job (see `embedAndIndexSource`, batches of 50) — the function itself does not chunk large arrays.
 
 ### Pinecone (`@pinecone-database/pinecone`)
