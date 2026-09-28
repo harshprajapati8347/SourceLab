@@ -24,5 +24,6 @@ export type ChatMessage = {
   role: "USER" | "ASSISTANT";
   content: string;
   citations: ChatCitation[] | null;
+  trace?: unknown;
   createdAt: string;
 };

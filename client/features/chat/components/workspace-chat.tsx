@@ -45,9 +45,11 @@ import {
   useDeleteConversation,
 } from "../hooks/use-conversations";
 import { ChatMessageBody } from "./chat-message-body";
+import { RagTracePanel } from "./rag-trace-panel";
 import { CitationSources } from "./citation-sources";
 import { ChatComposer } from "./chat-composer";
-import type { ChatCitation } from "../lib/types";
+import type { ChatCitation, ChatMessage } from "../lib/types";
+import { parseRagTrace, type RagTrace } from "../lib/rag-trace";
 import { workspaceRoutes } from "@/features/workspaces/lib/routes";
 import { billingKeys } from "@/features/billing/hooks/use-billing";
 import { INSUFFICIENT_CREDITS_MESSAGE } from "@/features/billing/lib/constants";
@@ -62,11 +64,34 @@ type WorkspaceChatProps = {
   defaultModel?: string;
 };
 
-function getMessageText(message: UIMessage) {
+type SourceLabMessage = UIMessage<unknown, { rag: RagTrace }>;
+
+function getMessageText(message: SourceLabMessage) {
   return message.parts
     .filter((part) => part.type === "text")
     .map((part) => part.text)
     .join("");
+}
+
+function readRagTrace(message: SourceLabMessage) {
+  const part = message.parts.find((item) => item.type === "data-rag");
+  if (!part || part.type !== "data-rag") {
+    return null;
+  }
+
+  return parseRagTrace(part.data);
+}
+
+function toStoredParts(message: ChatMessage): SourceLabMessage["parts"] {
+  const parts: SourceLabMessage["parts"] = [
+    { type: "text", text: message.content },
+  ];
+  const trace = parseRagTrace(message.trace);
+  if (trace) {
+    parts.push({ type: "data-rag", id: "rag-trace", data: trace });
+  }
+
+  return parts;
 }
 
 export function WorkspaceChat({
@@ -166,9 +191,10 @@ export function WorkspaceChat({
     ],
   );
 
-  const { messages, sendMessage, setMessages, status, error } = useChat({
-    transport,
-  });
+  const { messages, sendMessage, setMessages, status, error } =
+    useChat<SourceLabMessage>({
+      transport,
+    });
 
   const clearRestoredMessage = useCallback(() => {
     setRestoredMessage(null);
@@ -208,7 +234,7 @@ export function WorkspaceChat({
       storedMessages.map((message) => ({
         id: message.id,
         role: message.role === "USER" ? "user" : "assistant",
-        parts: [{ type: "text" as const, text: message.content }],
+        parts: toStoredParts(message),
       })),
     );
   }, [conversationId, storedMessages, setMessages, isStreaming]);
@@ -361,6 +387,8 @@ export function WorkspaceChat({
                 <MessageGroup className="gap-6">
                   {messages.map((message, messageIndex) => {
                     const isUser = message.role === "user";
+                    const text = getMessageText(message);
+                    const trace = isUser ? null : readRagTrace(message);
                     const citations = citationsByMessageId[message.id];
                     const isLastMessage = messageIndex === messages.length - 1;
                     const isAnimatingMessage =
@@ -378,23 +406,26 @@ export function WorkspaceChat({
                             </MessageAvatar>
                           ) : null}
                           <MessageContent>
-                            <Bubble
-                              align={isUser ? "end" : "start"}
-                              variant={isUser ? "default" : "ghost"}
-                            >
-                              <BubbleContent className="leading-relaxed">
-                                {isUser ? (
-                                  getMessageText(message)
-                                ) : (
-                                  <ChatMessageBody
-                                    text={getMessageText(message)}
-                                    citations={citations}
-                                    workspaceId={workspaceId}
-                                    isAnimating={isAnimatingMessage}
-                                  />
-                                )}
-                              </BubbleContent>
-                            </Bubble>
+                            {trace ? <RagTracePanel trace={trace} /> : null}
+                            {text ? (
+                              <Bubble
+                                align={isUser ? "end" : "start"}
+                                variant={isUser ? "default" : "ghost"}
+                              >
+                                <BubbleContent className="leading-relaxed">
+                                  {isUser ? (
+                                    text
+                                  ) : (
+                                    <ChatMessageBody
+                                      text={text}
+                                      citations={citations}
+                                      workspaceId={workspaceId}
+                                      isAnimating={isAnimatingMessage}
+                                    />
+                                  )}
+                                </BubbleContent>
+                              </Bubble>
+                            ) : null}
                             {!isUser && citations?.length ? (
                               <MessageFooter className="mt-1 w-full max-w-full flex-col items-start gap-0 px-0">
                                 <CitationSources

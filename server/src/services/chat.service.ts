@@ -7,7 +7,7 @@
  * User message
  *   → input guardrails
  *   → save to DB
- *   → RAG retrieval + Mem0 memories
+ *   → query intelligence, RAG retrieval, context processing + Mem0 memories
  *   → streamText (AI SDK) with optional web search tool
  *   → save assistant reply + citations
  *   → optional summary job + Mem0 learning
@@ -35,10 +35,9 @@ import {
   RECENT_MESSAGE_WINDOW,
 } from "../lib/ai-config.js";
 import { enqueueConversationSummarize } from "../lib/conversation-events.js";
-import {
-  buildChatSystemPrompt,
-  retrieveWorkspaceContext,
-} from "../lib/rag/retrieve.js";
+import { buildChatSystemPrompt } from "../lib/rag/retrieve.js";
+import type { RagTrace } from "../lib/rag/rag-trace.js";
+import { runRagPipeline } from "./rag-pipeline.service.js";
 import {
   createConversationRecord,
   findConversationByIdAndWorkspaceId,
@@ -55,6 +54,7 @@ import {
 import { addMemoriesFromMessages, searchUserMemories } from "../lib/mem0.js";
 import {
   formatTavilyResultsForPrompt,
+  mergeWebSearchResults,
   searchWeb,
   type TavilySearchResponse,
 } from "../lib/tavily.js";
@@ -208,7 +208,7 @@ async function resolveConversation(
  * **Pipeline:**
  * 1. Validate user message and run input guardrails
  * 2. Resolve/create conversation and save the user message
- * 3. Parallel: Pinecone RAG retrieval + Mem0 memory search
+ * 3. Parallel: query and context pipeline + Mem0 memory search
  * 4. Build system prompt and stream model response via AI SDK
  * 5. On finish: save assistant message, citations, title, summary job, Mem0 learning
  *
@@ -270,38 +270,85 @@ export async function streamWorkspaceChat(
     content: userText,
   });
 
-  const [retrievedChunks, userMemories] = await Promise.all([
-    retrieveWorkspaceContext(workspaceId, userText),
-    searchUserMemories(userId, userText),
-  ]);
-
-  const citations = retrievedChunks.map((chunk) => ({
-    sourceId: chunk.sourceId,
-    sourceTitle: chunk.sourceTitle,
-    sourceType: chunk.sourceType,
-    chunkId: chunk.chunkId,
-    chunkIndex: chunk.chunkIndex,
-    page: chunk.page,
-    excerpt: chunk.text.slice(0, 280),
-    score: chunk.score,
-  }));
-  const systemPrompt = buildChatSystemPrompt({
-    chunks: retrievedChunks,
-    conversationSummary: conversation.summary,
-    userMemories: userMemories.map((memory) => memory.memory),
-    webSearchEnabled,
-  });
-
   const contextMessages =
     conversation.summary && input.messages.length > RECENT_MESSAGE_WINDOW
       ? input.messages.slice(-RECENT_MESSAGE_WINDOW)
       : input.messages;
 
   let webSearchResults: TavilySearchResponse | null = null;
+  let citations: Array<{
+    sourceId?: string;
+    sourceTitle: string;
+    sourceType: string;
+    chunkId?: string;
+    chunkIndex?: number;
+    page?: number;
+    excerpt: string;
+    score?: number;
+    url?: string;
+  }> = [];
+  let trace: RagTrace = { steps: [] };
 
   const stream = createUIMessageStream({
     originalMessages: input.messages,
     execute: async ({ writer }) => {
+      const publishTrace = (next: RagTrace) => {
+        trace = next;
+        writer.write({
+          type: "data-rag",
+          id: "rag-trace",
+          data: next,
+        });
+      };
+
+      const [pipeline, userMemories] = await Promise.all([
+        runRagPipeline({
+          workspaceId,
+          userText,
+          conversationSummary: conversation.summary,
+          recentTurns: formatRecentTurns(input.messages),
+          webSearchEnabled,
+          onTrace: publishTrace,
+        }),
+        searchUserMemories(userId, userText),
+      ]);
+
+      trace = pipeline.trace;
+      citations = pipeline.chunks.map((chunk) => ({
+        sourceId: chunk.sourceId,
+        sourceTitle: chunk.sourceTitle,
+        sourceType: chunk.sourceType,
+        chunkId: chunk.chunkId,
+        chunkIndex: chunk.chunkIndex,
+        page: chunk.page,
+        excerpt: chunk.text.slice(0, 280),
+        score: chunk.score,
+      }));
+      webSearchResults = pipeline.webResults;
+
+      const systemPrompt = buildChatSystemPrompt({
+        chunks: pipeline.chunks,
+        conversationSummary: conversation.summary,
+        userMemories: userMemories.map((memory) => memory.memory),
+        webSearchEnabled,
+        webResults: pipeline.webResults,
+        contradictions: pipeline.contradictions,
+        weakEvidence: pipeline.weakEvidence,
+      });
+
+      publishTrace({
+        steps: [
+          ...pipeline.trace.steps,
+          {
+            id: "generating",
+            label: "Generating",
+            status: "active",
+            summary: "Writing the answer",
+            lines: [],
+          },
+        ],
+      });
+      console.info("[rag] Generating → started");
       const tools = webSearchEnabled
         ? {
             web_search: tool({
@@ -314,7 +361,10 @@ export async function streamWorkspaceChat(
               }),
               execute: async ({ query }) => {
                 const results = await searchWeb(query);
-                webSearchResults = results;
+                webSearchResults = mergeWebSearchResults(
+                  webSearchResults,
+                  results,
+                );
                 return formatTavilyResultsForPrompt(results);
               },
             }),
@@ -351,11 +401,20 @@ export async function streamWorkspaceChat(
         : [];
       const allCitations = [...citations, ...webCitations];
 
+      console.info("[rag] Generating → Answer complete");
+
       await createMessageRecord({
         conversationId: conversation.id,
         role: "ASSISTANT",
         content: assistantText,
         citations: allCitations,
+        trace: {
+          steps: trace.steps.map((step) =>
+            step.id === "generating"
+              ? { ...step, status: "done", summary: "Answer complete" }
+              : step,
+          ),
+        },
       });
 
       await touchConversation(conversation.id);
@@ -398,4 +457,22 @@ export async function streamWorkspaceChat(
       "X-Conversation-Id": conversation.id,
     },
   });
+}
+
+function formatRecentTurns(messages: UIMessage[]) {
+  return messages
+    .slice(-RECENT_MESSAGE_WINDOW)
+    .map((message) => {
+      const text = getTextFromUIMessage(message)
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 500);
+      if (!text) {
+        return null;
+      }
+
+      return `${message.role}: ${text}`;
+    })
+    .filter((turn) => turn !== null)
+    .join("\n");
 }

@@ -6,8 +6,8 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 
 ## Current Status
 
-**Phase:** Auth (Google + email/password), workspaces, sources/RAG, chat, learning artifacts, memory, billing (Stripe Pro) + credits.
-**Last completed:** Chat input guardrails — harmful, out-of-scope, and financial-PII messages are rejected before credits, persistence, RAG, or the model stream.
+**Phase:** Auth (Google + email/password), workspaces, sources/RAG, chat with query and context intelligence, learning artifacts, memory, billing (Stripe Pro) + credits.
+**Last completed:** Query and context intelligence — chat classifies each message, routes retrieval (including HyDE and sub-questions), scores the chunks, runs one corrective pass, then deduplicates and compresses context before `streamText`.
 **Next:** Operator setup — Resend domain, Stripe test Product/Price (`STRIPE_PRO_PRICE_ID`), webhook to Express `/api/auth/stripe/webhook`. See `context/billing-and-credits.md`.
 
 ---
@@ -54,6 +54,10 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 - [x] Conversation delete, "new chat", markdown export
 - [x] Deep-link into chat with a pre-filled question (`?ask=...`, used by the mind map viewer's "ask in chat")
 - [x] Input guardrails (`@openai/guardrails`) before RAG: moderation, jailbreak, off-topic, and blocking PII for payment credentials. A block returns the original message and restores it in the composer.
+- [x] Query classification and routing (rewrite, HyDE, sub-questions, multi-query) before Pinecone retrieval
+- [x] Retrieval-quality gate (relevance, coverage, freshness, authority, duplication) with one corrective pass, and Tavily only when web search is already enabled
+- [x] Semantic dedup, extractive context compression, and contradiction notes passed into the system prompt with source authority and indexed time
+- [x] Pipeline trace logged on the server and shown in chat, with each completed step expandable. The trace is stored on the assistant message.
 
 ### Learning Artifacts ("Learn")
 - [x] Six types: Summary, Takeaways, Flashcards, Quiz, Mind Map, Report
@@ -110,6 +114,7 @@ _None currently._
 - **Pro cancellation stays Pro until Stripe deletes the subscription** — `User.plan` flips to `free` only then; leftover credits are kept.
 - **Stripe webhooks must hit Express `:8080` (or the API host)** — not the Next.js rewrite — so signature verification sees the raw body.
 - **Chat input guardrails sit in front of `streamText`** — `@openai/guardrails` checks the latest user message only. A block returns JSON 400 and does not create a conversation, charge credits, or start the AI SDK stream. PII blocking is limited to payment credentials (`CREDIT_CARD`, `CVV`, `IBAN_CODE`, `BIC_SWIFT`, `CRYPTO`).
+- **Query and context intelligence is chat-only and stays inside the 0.1 credit** — classification, HyDE, and the coverage judgement use `gpt-4o-mini`. Authority comes from source type unless `metadata.authority` is already set. Contradiction is shown to the model and is not part of the 0.55 gate. Learning artifacts are unchanged. Each step is printed as `[rag]` console lines and stored on `Message.trace` for the chat pipeline panel.
 
 ## Notes
 

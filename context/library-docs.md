@@ -103,10 +103,11 @@ return result.output;
 - Tool calls use `tool({ description, inputSchema: z.object({...}), execute })`; `stopWhen: isStepCount(n)` caps how many tool-call round-trips the model can make.
 - `Output.object({ schema })` + `generateText` is the pattern for structured (non-chat) generation — used for all six artifact types and conversation summaries.
 - Model ids and allow-list live in `server/src/lib/ai-config.ts` (`CHAT_MODEL`, `CHAT_MODELS`) — always validate a client-supplied model against `CHAT_MODELS` before passing it to `openai(...)`.
+- Query and context intelligence (`server/src/lib/rag/query-intelligence.ts`, `retrieval-quality.ts`, `context-intelligence.ts`, orchestrated by `server/src/services/rag-pipeline.service.ts`) uses `generateText` + `Output.object` on `RAG_INTELLIGENCE_MODEL` (`gpt-4o-mini`), even when the answer model is `gpt-4o`. Classification, HyDE, corrective rewrites, and the coverage/contradiction judgement go through this path. Embeddings stay on the `openai` SDK. The same steps are printed as `[rag]` console lines and streamed as a `data-rag` part, then saved on `Message.trace`.
 
 ### OpenAI SDK (`openai`) — embeddings only
 
-- The raw `openai` SDK is used for embeddings (`server/src/lib/openai.ts`). Chat and artifact generation go through the AI SDK (`@ai-sdk/openai`). Don't send chat completions through the embeddings client.
+- The raw `openai` SDK is used for embeddings (`server/src/lib/openai.ts`). Chat and artifact generation go through the AI SDK (`@ai-sdk/openai`). Don't send chat completions through the embeddings client. Query embedding, HyDE passage embedding, multi-query embedding, and semantic-dedup embedding all go through `embedTexts`.
 - Input guardrails use a separate OpenAI client only for moderation and the jailbreak/off-topic classifiers. See `@openai/guardrails` below.
 
 ### `@openai/guardrails` — chat input gate

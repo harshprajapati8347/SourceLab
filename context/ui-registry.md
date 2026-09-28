@@ -131,6 +131,7 @@ Generated shadcn/ui components (style `base-rhea`, built on `@base-ui/react`, ic
 | `CitationMarker` (`citation-marker.tsx`) | Small pill button (`[1]`, `[2]`, …) inline in assistant text; hover reveals a `CitationPreview` |
 | `CitationPreview` (`citation-preview.tsx`) | Hover card body showing a citation's source title, excerpt, and a link to the source or URL |
 | `CitationSources` (`citation-sources.tsx`) | Row of unique source `Attachment` chips below an assistant message, each with a hover preview and a link to the source detail page or external URL |
+| `RagTracePanel` (`rag-trace-panel.tsx`) | Pipeline steps above an assistant reply. Each completed step expands to the values from that step (rewrite, HyDE, retrieval, CRAG, context). |
 
 ### `features/learn/components/`
 | Component | Description |
@@ -214,6 +215,25 @@ Last updated: 2026-08-29
 | Accent usage | `text-primary` on feature check icons; `border-primary` on Pro |
 
 **Pattern notes:** Two-up grid of cards, not a table. Check rows use `CheckIcon` + `text-primary`. Do not introduce a third tier card.
+
+### RagTracePanel
+
+File: `client/features/chat/components/rag-trace-panel.tsx`
+Last updated: 2026-09-28
+
+| Property | Class |
+| --- | --- |
+| Background | `bg-muted/30` |
+| Border | `border` |
+| Border radius | `rounded-2xl` |
+| Text — primary | `text-sm` on the step label |
+| Text — secondary | `text-sm text-muted-foreground` on the summary; `text-xs text-muted-foreground` on the caption and expanded lines |
+| Spacing | `px-3 py-2` on the panel; `px-1 py-1` on each step; expanded lines `px-7 pb-2` |
+| Hover state | `hover:bg-muted/40` on a step that can expand |
+| Shadow | none |
+| Accent usage | `bg-primary` dot on a finished step; `Spinner` on the active step |
+
+**Pattern notes:** Sits above the assistant bubble, not inside it. Finished steps use `Collapsible` and stay closed until opened. Do not put pipeline values into the answer text.
 
 ---
 

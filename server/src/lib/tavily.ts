@@ -53,6 +53,40 @@ export async function searchWeb(query: string): Promise<TavilySearchResponse> {
 }
 
 /**
+ * Combines web search responses, keeping the first result for each URL.
+ *
+ * @param existing - Results already retrieved for this turn, if any
+ * @param next - A later search, such as a model tool call
+ * @returns One response whose results are unique by URL
+ */
+export function mergeWebSearchResults(
+  existing: TavilySearchResponse | null,
+  next: TavilySearchResponse,
+): TavilySearchResponse {
+  if (!existing) {
+    return next;
+  }
+
+  const seen = new Set(existing.results.map((result) => result.url));
+  const results = [...existing.results];
+
+  for (const result of next.results) {
+    if (seen.has(result.url)) {
+      continue;
+    }
+
+    seen.add(result.url);
+    results.push(result);
+  }
+
+  return {
+    query: existing.query,
+    answer: existing.answer ?? next.answer,
+    results,
+  };
+}
+
+/**
  * Formats Tavily results into a prompt block for the chat model.
  *
  * Results are labeled `[W1]`, `[W2]`, etc. for inline citation in assistant replies.

@@ -82,6 +82,36 @@ export function createSourceRecord(data: CreateSourceData) {
   });
 }
 
+export const sourceAuthoritySelect = {
+  id: true,
+  type: true,
+  metadata: true,
+  createdAt: true,
+} as const;
+
+export type SourceAuthorityRecord = Prisma.SourceGetPayload<{
+  select: typeof sourceAuthoritySelect;
+}>;
+
+/**
+ * Loads the fields needed to score authority and freshness for retrieved chunks.
+ *
+ * @param workspaceId - Workspace that owns the sources
+ * @param sourceIds - Source ids referenced by the current retrieval set
+ * @returns Matching source rows, or an empty list when `sourceIds` is empty
+ */
+export function findSourcesByIds(workspaceId: string, sourceIds: string[]) {
+  const ids = [...new Set(sourceIds)];
+  if (ids.length === 0) {
+    return Promise.resolve([] as SourceAuthorityRecord[]);
+  }
+
+  return prisma.source.findMany({
+    where: { workspaceId, id: { in: ids } },
+    select: sourceAuthoritySelect,
+  });
+}
+
 export function findSourceById(sourceId: string) {
   return prisma.source.findUnique({
     where: { id: sourceId },

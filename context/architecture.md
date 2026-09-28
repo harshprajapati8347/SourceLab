@@ -87,7 +87,8 @@
     │   ├── services/                → Business logic (auth-agnostic of Express req/res)
     │   ├── repositories/            → Prisma queries only — no business logic
     │   ├── lib/                     → Third-party client wrappers (openai, pinecone, mem0, cloudinary, firecrawl,
-    │   │                              tavily, youtube, pdf, chunking, auth, db, ai-config) + lib/rag/retrieve.ts
+    │   │                              tavily, youtube, pdf, chunking, auth, db, ai-config) + lib/rag/
+    │   │                              (retrieve, query intelligence, quality gate, context compression)
     │   ├── inngest/                 → Inngest client + durable function definitions
     │   ├── middleware/              → requireAuth, upload (multer), error-handler
     │   ├── types/                   → AppError hierarchy, Express type augmentation (req.session)
@@ -156,12 +157,27 @@ step: mark-failed             → status = FAILED, metadata.processingError set;
 Client useChat → POST /api/workspaces/:workspaceId/chat  (DefaultChatTransport, streamed)
         ↓
 streamWorkspaceChat():
-  - resolve/create Conversation, save user Message
-  - in parallel: retrieveWorkspaceContext() [embed query → Pinecone query, filter by RAG_MIN_SCORE, top RAG_TOP_K]
-                 searchUserMemories() [Mem0 semantic search]
-  - buildChatSystemPrompt() from chunks + memories + conversation summary + web-search availability
-  - streamText() (AI SDK) with optional web_search tool (Tavily), streamed back as a UI message stream
-  - onFinish: save assistant Message + citations, touch conversation, auto-title if new,
+  - input guardrails, then resolve/create Conversation, deduct 0.1 credits, save user Message
+  - in parallel: runRagPipeline() and searchUserMemories() [Mem0]
+        ↓
+runRagPipeline():
+  - gpt-4o-mini classifies the latest message (summary + recent turns) and routes transforms
+  - conversational / out-of-domain: skip workspace retrieval
+  - otherwise embed one or more queries (HyDE passage + query for simple factual and ambiguous;
+    sub-questions for multi-hop, analytical, and comparative) → Pinecone, merge by chunk id
+  - load source rows for authority + indexedAt, then score relevance, coverage, freshness,
+    authority, and duplication. Below 0.55: one rewrite/expand pass at a relaxed score floor,
+    then Tavily only when the web-search toggle is already on
+  - semantic dedup, extractive compression, contradiction notes. Chunk text stays verbatim
+  - on classifier, HyDE, or coverage-judgement failure: fall open to one top-6 retrieval of the original message
+        ↓
+streamWorkspaceChat() continues:
+  - buildChatSystemPrompt() from compressed chunks, authority metadata, conflicts,
+    memories, summary, weak-evidence note, and any corrective web results
+  - the same steps are logged as `[rag]` console lines and streamed as a `data-rag` message part
+  - streamText() (AI SDK) with optional web_search tool (Tavily)
+  - onFinish: save assistant Message + citations (workspace chunks that remained, plus web results),
+              touch conversation, auto-title if new,
               every CONVERSATION_SUMMARY_INTERVAL (8) messages → enqueue conversation/summarize,
               fire-and-forget Mem0 addMemoriesFromMessages()
         ↓
@@ -253,6 +269,7 @@ Auth tables (`user`, `session`, `account`, `verification`, `subscription`) are o
 | role | enum `MessageRole` | `USER \| ASSISTANT` |
 | content | String | Plain text |
 | citations | Json? | Array of `{ sourceId, sourceTitle, sourceType, chunkId, chunkIndex, page?, excerpt, score? }` or web citations `{ sourceType: "WEB", sourceTitle, url, excerpt }` |
+| trace | Json? | Retrieval steps shown in chat: `{ steps: [{ id, label, status, summary, lines }] }` |
 
 ### `learning_artifact`
 | Column | Type | Notes |

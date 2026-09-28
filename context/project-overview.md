@@ -90,8 +90,11 @@ The source library UI polls sources with pending/processing status every 3 secon
 ### Chat
 
 - Per-workspace, multi-conversation chat with streaming responses (AI SDK `useChat` + `DefaultChatTransport`)
-- Each user message triggers, in parallel: Pinecone vector retrieval of the top relevant source chunks (RAG) and a Mem0 semantic search over the user's personal memories
-- The system prompt is built from retrieved chunks, conversation summary (if any), user memories, and web-search availability
+- Each user message is classified, then retrieved from Pinecone, in parallel with a Mem0 search over the user's memories. Simple factual and ambiguous questions also retrieve with a hypothetical passage. Multi-hop, analytical, and comparative questions retrieve several queries in parallel and merge chunks by id
+- Retrieved chunks are scored for relevance, coverage, freshness, authority, and duplication. A score below 0.55 rewrites and retrieves once more. If the user already enabled web search, that pass can also call Tavily
+- Before the prompt is built, near-duplicate chunks are dropped and the remaining text is capped. Conflicting sources are kept, with authority and indexed time, so the model can prefer the newer or more authoritative one
+- Each of those steps is logged on the server and shown above the answer. A finished step can be opened to see the rewrite, hypothetical passage, retrieved chunks, quality scores, and CRAG decision
+- The system prompt is built from those chunks, conversation summary (if any), user memories, and web-search availability
 - Optional **web search** toggle exposes a `web_search` tool (Tavily) the model can call for up-to-date information outside the workspace
 - Responses cite sources inline (`[1]`, `[2]`, …) and web results (`[W1]`, `[W2]`, …); citations render as hoverable source cards linking back to the source detail page or the external URL
 - Conversations can be renamed implicitly (auto-titled from the first message), deleted, or exported to a markdown file
@@ -119,7 +122,7 @@ The source library UI polls sources with pending/processing status every 3 secon
 - Five source ingestion paths: text, markdown, PDF upload, website scrape, YouTube transcript (+ web-search-to-source)
 - Background source processing pipeline: extraction → chunking → embedding → Pinecone indexing, with status tracking and reprocessing
 - Source library with search, type/status filters, grid/list view, multi-select bulk delete, bulk reprocess of failed sources
-- Per-workspace multi-conversation RAG chat with streaming, citations, model selection, optional web search tool, conversation export, and delete
+- Per-workspace multi-conversation RAG chat with streaming, citations, model selection, optional web search tool, query classification, corrective retrieval, context compression, conversation export, and delete
 - Rolling conversation summarization for long chats
 - Six learning artifact types generated from workspace sources, each with a dedicated viewer
 - Cross-workspace long-term memory (manual + auto-learned) via Mem0
@@ -135,8 +138,6 @@ The source library UI polls sources with pending/processing status every 3 secon
 - add artifacts to generate audio podcasts and personalized learning roadmaps
 - strict mode rag for only using the sources in the workspace otherwise deny answers
 - Source Management: One-click source deletion, metadata inspection drawer, and re-indexing pipeline trigger.
-- Query Transformation Strategies: Multi-query expansion (Rewrite, StepBack, SubQuestion, and Composite selector) to maximize retrieval recall.
-- Corrective RAG (CRAG) Gate: CRAGService evaluates retrieved context relevance before LLM generation. Automatically adapts queries, relaxes similarity thresholds, or returns safe fallback responses to guarantee zero hallucinations.
 - LLM Context Reranking: LLMRerankerProvider re-scores and re-orders accepted chunks so the most relevant context sits at the top of the prompt window.
 - Multi-Layer Guardrails: Input guards (prompt injection, jailbreak defense, max length, PII detection) and Output guards (citation verification, response length validation).
 - Server-Sent Events (SSE) Streaming: Low-latency token-by-token streaming using LLM Chat providers.
