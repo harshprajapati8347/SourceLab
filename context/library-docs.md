@@ -113,7 +113,7 @@ return result.output;
 
 - Installed on the server. Configuration lives in `server/src/config/guardrails_config.json`.
 - `server/src/lib/input-guardrails.ts` loads that file with `loadPipelineBundles` and runs `pre_flight`, then `input`, via `runGuardrails` before RAG or `streamText`. Output guardrails are empty.
-- A tripwire throws `GuardrailTripwireTriggered`. `streamWorkspaceChat` maps it to `InputBlockedError` (HTTP 400, `{ code: "INPUT_BLOCKED", guardrail }`). The chat transport reads `error` from any non-OK JSON body and shows it in the existing banner.
+- A tripwire throws `GuardrailTripwireTriggered`. `streamWorkspaceChat` maps it to `InputBlockedError` (HTTP 400, `{ code: "INPUT_BLOCKED", guardrail, message }`). `message` is the exact user text that was checked. The chat transport reads `error` from any non-OK JSON body and shows it in the existing banner, and puts `message` back in the composer.
 - Blocked messages are not saved, not charged, and do not create a conversation.
 - Pre-flight: Moderation, plus Contains PII in blocking mode (`block: true`, `detect_encoded_pii: false`) for `CREDIT_CARD`, `CVV`, `IBAN_CODE`, `BIC_SWIFT`, and `CRYPTO` only. Names, URLs, emails, and dates are not treated as secrets.
 - Input: Jailbreak and Off Topic Prompts (`gpt-4.1-mini`, confidence `0.7`). Both use `OPENAI_API_KEY`. A guardrail execution failure fails the request closed (`raiseGuardrailErrors: true`).

@@ -53,7 +53,7 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 - [x] Mem0 long-term memory: recalled into chat context, auto-learned from conversations
 - [x] Conversation delete, "new chat", markdown export
 - [x] Deep-link into chat with a pre-filled question (`?ask=...`, used by the mind map viewer's "ask in chat")
-- [x] Input guardrails (`@openai/guardrails`) before RAG: moderation, jailbreak, off-topic, and blocking PII for payment credentials
+- [x] Input guardrails (`@openai/guardrails`) before RAG: moderation, jailbreak, off-topic, and blocking PII for payment credentials. A block returns the original message and restores it in the composer.
 
 ### Learning Artifacts ("Learn")
 - [x] Six types: Summary, Takeaways, Flashcards, Quiz, Mind Map, Report

@@ -69,18 +69,23 @@ function guardrailNameFromTripwire(error: GuardrailTripwireTriggered) {
 /**
  * Maps a guardrail tripwire to a client-safe 400.
  *
- * The response includes the guardrail name only. Detected spans, confidence
- * scores, and the blocked text stay on the server.
+ * The response includes the guardrail name and the original user message so
+ * the composer can restore it. Detected spans and confidence scores stay
+ * on the server.
  *
  * @param error - Tripwire raised by {@link assertChatInputAllowed}
+ * @param message - Exact user text that was checked
  * @returns Application error the global handler serializes as JSON
  */
-export function toInputBlockedError(error: GuardrailTripwireTriggered) {
+export function toInputBlockedError(
+  error: GuardrailTripwireTriggered,
+  message: string,
+) {
   const guardrail = guardrailNameFromTripwire(error);
   console.warn(`Input guardrail blocked request: ${guardrail}`);
   return new InputBlockedError(
     INPUT_BLOCKED_MESSAGES[guardrail] ?? "I can't help with that request.",
-    { code: "INPUT_BLOCKED", guardrail },
+    { code: "INPUT_BLOCKED", guardrail, message },
   );
 }
 

@@ -79,6 +79,8 @@ export function WorkspaceChat({
   const askPrompt = searchParams.get("ask");
   const handledAskPrompt = useRef<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [restoredMessage, setRestoredMessage] = useState<string | null>(null);
+  const restoreBlockedDraftRef = useRef<(message: string) => void>(() => {});
 
   const getPrefs = useChatPreferences((state) => state.getPrefs);
   const setWebSearch = useChatPreferences((state) => state.setWebSearch);
@@ -127,7 +129,17 @@ export function WorkspaceChat({
             }
             const payload = (await response.json().catch(() => null)) as {
               error?: string;
+              details?: {
+                code?: string;
+                message?: string;
+              };
             } | null;
+            if (
+              payload?.details?.code === "INPUT_BLOCKED" &&
+              typeof payload.details.message === "string"
+            ) {
+              restoreBlockedDraftRef.current(payload.details.message);
+            }
             throw new Error(
               payload?.error ??
                 (response.status === 402
@@ -157,6 +169,21 @@ export function WorkspaceChat({
   const { messages, sendMessage, setMessages, status, error } = useChat({
     transport,
   });
+
+  const clearRestoredMessage = useCallback(() => {
+    setRestoredMessage(null);
+  }, []);
+
+  restoreBlockedDraftRef.current = (message: string) => {
+    setRestoredMessage(message);
+    setMessages((current) => {
+      const last = current[current.length - 1];
+      if (last?.role === "user" && getMessageText(last) === message) {
+        return current.slice(0, -1);
+      }
+      return current;
+    });
+  };
 
   const isStreaming = status === "streaming" || status === "submitted";
 
@@ -400,6 +427,8 @@ export function WorkspaceChat({
         isStreaming={isStreaming}
         webSearchEnabled={chatPrefs.webSearch}
         onWebSearchChange={(enabled) => setWebSearch(workspaceId, enabled)}
+        restoredMessage={restoredMessage}
+        onRestoredMessageApplied={clearRestoredMessage}
         onSubmit={(text) => {
           void sendMessage({ text });
         }}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { GlobeIcon, Loader2Icon, SendIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,6 +13,8 @@ type ChatComposerProps = {
   isStreaming?: boolean;
   webSearchEnabled?: boolean;
   onWebSearchChange?: (enabled: boolean) => void;
+  restoredMessage?: string | null;
+  onRestoredMessageApplied?: () => void;
 };
 
 export function ChatComposer({
@@ -21,8 +23,19 @@ export function ChatComposer({
   isStreaming = false,
   webSearchEnabled = false,
   onWebSearchChange,
+  restoredMessage = null,
+  onRestoredMessageApplied,
 }: ChatComposerProps) {
   const [input, setInput] = useState("");
+
+  useEffect(() => {
+    if (restoredMessage == null) {
+      return;
+    }
+
+    setInput(restoredMessage);
+    onRestoredMessageApplied?.();
+  }, [restoredMessage, onRestoredMessageApplied]);
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();

@@ -251,7 +251,7 @@ export async function streamWorkspaceChat(
     await assertChatInputAllowed(userText);
   } catch (error) {
     if (error instanceof GuardrailTripwireTriggered) {
-      throw toInputBlockedError(error);
+      throw toInputBlockedError(error, userText);
     }
     throw error;
   }

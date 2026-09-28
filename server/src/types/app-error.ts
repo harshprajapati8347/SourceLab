@@ -50,7 +50,7 @@ export class PaymentRequiredError extends AppError {
 export class InputBlockedError extends AppError {
   constructor(
     message: string,
-    details: { code: "INPUT_BLOCKED"; guardrail: string },
+    details: { code: "INPUT_BLOCKED"; guardrail: string; message: string },
   ) {
     super(400, message, details);
     this.name = "InputBlockedError";
