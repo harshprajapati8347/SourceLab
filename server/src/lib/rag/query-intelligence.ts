@@ -142,6 +142,8 @@ export async function planCorrectiveQueries(
       system: [
         "You improve a search query that retrieved weak workspace evidence.",
         "Rewrite it into a standalone search query and add a few alternative phrasings.",
+        "The queries may look for details that are missing from what was already retrieved.",
+        "Do not tell the search to infer, guess, assume, or fill in missing facts.",
         "Do not answer the question.",
       ].join("\n"),
       prompt: userText,
@@ -152,11 +154,12 @@ export async function planCorrectiveQueries(
     }
 
     const rewrittenQuery =
-      result.output.rewrittenQuery.trim() || userText.trim();
-    const expansions = uniqueQueries(result.output.expansions).slice(
-      0,
-      RAG_MAX_EXPANSIONS,
-    );
+      sanitizeRetrievalQuery(
+        result.output.rewrittenQuery.trim() || userText.trim(),
+      ) || sanitizeRetrievalQuery(userText.trim());
+    const expansions = uniqueQueries(
+      result.output.expansions.map((query) => sanitizeRetrievalQuery(query)),
+    ).slice(0, RAG_MAX_EXPANSIONS);
 
     return {
       rewrittenQuery,
@@ -185,11 +188,13 @@ export async function planCorrectiveQueries(
  * @returns Route decision consumed by {@link planQuery}
  */
 export function routeQuery(userText: string, classification: Classification) {
-  const rewritten = classification.rewrittenQuery.trim() || userText.trim();
-  const subqueries = uniqueQueries(classification.subqueries).slice(
-    0,
-    RAG_MAX_SUBQUESTIONS,
-  );
+  const rewritten =
+    sanitizeRetrievalQuery(
+      classification.rewrittenQuery.trim() || userText.trim(),
+    ) || userText.trim();
+  const subqueries = uniqueQueries(
+    classification.subqueries.map((query) => sanitizeRetrievalQuery(query)),
+  ).slice(0, RAG_MAX_SUBQUESTIONS);
   const queryClass = classification.queryClass;
 
   const decision = (partial: {
@@ -252,13 +257,15 @@ export function routeQuery(userText: string, classification: Classification) {
     });
   }
 
+  const searchable =
+    sanitizeRetrievalQuery(userText.trim()) || userText.trim();
   const transforms: QueryTransform[] = classification.dependsOnHistory
     ? ["contextual_rewrite", "hyde"]
     : ["hyde"];
 
   return decision({
     transforms,
-    queries: [classification.dependsOnHistory ? rewritten : userText.trim()],
+    queries: [classification.dependsOnHistory ? rewritten : searchable],
     skipRetrieval: false,
     useHyde: true,
   });
@@ -311,6 +318,7 @@ async function classifyQuery(input: {
       "- conversational: greeting, thanks, or small talk",
       "Set dependsOnHistory when the message relies on earlier turns.",
       "rewrittenQuery must be a standalone search query.",
+      "Search queries may ask for details that could be missing. They must not say to infer, guess, or fill in those details.",
       "subqueries are required for multi_hop, analytical, and comparative questions, and empty otherwise.",
       "For comparative questions, use one subquery per side.",
       "Do not answer the question.",
@@ -352,6 +360,28 @@ async function generateHypotheticalPassage(query: string) {
   }
 
   return passage;
+}
+
+/**
+ * Removes instructions that tell retrieval to invent missing facts.
+ *
+ * The query can still search for a field that might be absent. It cannot
+ * ask the search to infer that field.
+ *
+ * @param query - Rewritten query or expansion
+ * @returns The query with inference instructions removed
+ */
+export function sanitizeRetrievalQuery(query: string) {
+  const cleaned = query
+    .replace(
+      /\s*(?:,|while|by|and|when)?\s*\b(?:infer(?:ring)?|guess(?:ing)?|assum(?:e|ing)|fabricat(?:e|ing)|invent(?:ing)?|fill(?:ing)? in)\b(?:\s+\w+){0,6}\s*missing(?:\s+\w+){0,4}/gi,
+      " ",
+    )
+    .replace(/\s+/g, " ")
+    .replace(/\s+([,.])/g, "$1")
+    .trim();
+
+  return cleaned;
 }
 
 function uniqueQueries(queries: string[]) {

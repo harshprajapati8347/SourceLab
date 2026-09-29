@@ -129,13 +129,17 @@ export async function maskOutputPii(text: string): Promise<OutputGuardStep> {
     throw new Error("Contains PII check failed");
   }
 
-  const masked = result.info.checked_text;
-  if (typeof masked !== "string") {
+  const checked = result.info.checked_text;
+  if (typeof checked !== "string") {
     throw new Error("Contains PII did not return masked text");
   }
 
-  const lines = piiLines(result.info);
+  // The package phone pattern is 3-3-4. Indian mobiles such as
+  // "+91 98765 43210" are masked here and reported as PHONE_NUMBER.
+  const supplemental = maskSupplementalPhones(checked);
+  const lines = withPhoneCount(piiLines(result.info), supplemental.count);
   const maskedCount = lines.filter((line) => line.startsWith("Masked ")).length;
+  const masked = supplemental.text;
 
   return {
     text: masked,
@@ -189,6 +193,9 @@ export async function checkOutputPolicy(text: string): Promise<OutputGuardStep> 
 
 /**
  * Blocks an answer that contains an API key or similar credential.
+ *
+ * Phone numbers are PII, not credentials. A phone that the PII step masks
+ * leaves this step clear.
  *
  * @param text - Answer that may be released
  * @returns The same text, or a replacement when a credential is detected
@@ -247,6 +254,57 @@ export async function outputSpansAreDisclosable(text: string) {
 
   const secrets = await checkOutputSecrets(text);
   return !secrets.blocked;
+}
+
+const SUPPLEMENTAL_PHONE_PATTERNS = [
+  /\+\s*91(?:[\s.-]*\d){10}\b/g,
+  /\b0[6-9]\d{4}[\s.-]?\d{5}\b/g,
+  /\b[6-9]\d{4}[\s.-]\d{5}\b/g,
+];
+
+/**
+ * Masks phone numbers the guardrail package's 3-3-4 pattern does not match.
+ *
+ * `+91` forms are replaced before the 5-5 grouping so the country code is
+ * included in the same placeholder.
+ *
+ * @param text - Text already passed through the package PII check
+ * @returns Masked text and how many extra phone numbers were found
+ */
+export function maskSupplementalPhones(text: string) {
+  let count = 0;
+  let next = text;
+
+  for (const pattern of SUPPLEMENTAL_PHONE_PATTERNS) {
+    next = next.replace(pattern, () => {
+      count += 1;
+      return "<PHONE_NUMBER>";
+    });
+  }
+
+  return { text: next, count };
+}
+
+function withPhoneCount(lines: string[], count: number) {
+  if (count === 0) {
+    return lines;
+  }
+
+  const cleaned = lines.filter(
+    (line) => line !== "No sensitive details detected.",
+  );
+  const index = cleaned.findIndex((line) =>
+    /^Masked \d+ PHONE_NUMBER$/.test(line),
+  );
+
+  if (index === -1) {
+    cleaned.push(`Masked ${count} PHONE_NUMBER`);
+    return cleaned;
+  }
+
+  const current = Number(cleaned[index]?.match(/\d+/)?.[0] ?? 0);
+  cleaned[index] = `Masked ${current + count} PHONE_NUMBER`;
+  return cleaned;
 }
 
 function piiLines(info: GuardrailResult["info"]) {

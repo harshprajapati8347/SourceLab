@@ -213,7 +213,7 @@ export function buildChatSystemPrompt(input: {
     sections.push(
       "This workspace has no indexed source content yet, or nothing relevant was retrieved.",
       prefetchedWeb
-        ? "Use the web results below when they apply. Write each factual claim as its own sentence, with its citation marker in that sentence."
+        ? "Use the web results below when they apply. Write each factual claim as its own sentence, with its citation marker in that sentence. If a requested detail is not stated, say that it is not in the sources. Do not infer or fill in missing details."
         : input.webSearchEnabled
           ? "Use web search when needed, or answer from general knowledge."
           : "Answer helpfully from general knowledge and suggest adding or processing sources when appropriate.",
@@ -234,6 +234,8 @@ export function buildChatSystemPrompt(input: {
     "If the context is insufficient, say so clearly.",
     "Cite sources inline using [1], [2], etc. matching the numbered context blocks.",
     "Write each factual claim as its own sentence, with its citation marker in that sentence.",
+    "If a requested detail is not stated in the retrieved context, say that it is not in the sources in its own sentence.",
+    "Do not infer, guess, or fill in missing details.",
     "Keep answers concise, accurate, and educational.",
     "",
     "Retrieved context:",

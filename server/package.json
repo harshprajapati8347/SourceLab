@@ -5,6 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "test": "tsx --test src/lib/output-guardrails.test.ts src/lib/rag/answer-grounding.test.ts src/lib/rag/query-intelligence.test.ts",
     "build": "prisma generate && tsc && node scripts/copy-guardrails-config.mjs",
     "start": "prisma migrate deploy && node dist/index.js",
     "prisma:generate": "prisma generate",
