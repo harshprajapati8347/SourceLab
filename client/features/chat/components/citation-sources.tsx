@@ -52,7 +52,8 @@ export function CitationSources({
   workspaceId,
   citations,
 }: CitationSourcesProps) {
-  const unique = uniqueCitationsBySource(citations);
+  const visible = citations.filter((citation) => citation.cited !== false);
+  const unique = uniqueCitationsBySource(visible);
 
   if (unique.length === 0) {
     return null;

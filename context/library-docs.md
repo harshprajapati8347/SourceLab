@@ -87,7 +87,11 @@ const result = streamText({
   tools: webSearchEnabled ? { web_search: tool({ description, inputSchema: z.object({...}), execute }) } : undefined,
   stopWhen: webSearchEnabled ? isStepCount(3) : undefined,
 });
-writer.merge(toUIMessageStream({ stream: result.stream }));
+const drafted = (await result.text).trim();
+// Output guardrails run on `drafted` before any text chunk is written.
+writer.write({ type: "text-start", id: "assistant-text" });
+writer.write({ type: "text-delta", id: "assistant-text", delta: safeText });
+writer.write({ type: "text-end", id: "assistant-text" });
 
 // Non-streaming structured generation (artifact-generation.service.ts)
 const result = await generateText({
@@ -103,21 +107,26 @@ return result.output;
 - Tool calls use `tool({ description, inputSchema: z.object({...}), execute })`; `stopWhen: isStepCount(n)` caps how many tool-call round-trips the model can make.
 - `Output.object({ schema })` + `generateText` is the pattern for structured (non-chat) generation — used for all six artifact types and conversation summaries.
 - Model ids and allow-list live in `server/src/lib/ai-config.ts` (`CHAT_MODEL`, `CHAT_MODELS`) — always validate a client-supplied model against `CHAT_MODELS` before passing it to `openai(...)`.
-- Query and context intelligence (`server/src/lib/rag/query-intelligence.ts`, `retrieval-quality.ts`, `context-intelligence.ts`, orchestrated by `server/src/services/rag-pipeline.service.ts`) uses `generateText` + `Output.object` on `RAG_INTELLIGENCE_MODEL` (`gpt-4o-mini`), even when the answer model is `gpt-4o`. Classification, HyDE, corrective rewrites, and the coverage/contradiction judgement go through this path. Embeddings stay on the `openai` SDK. The same steps are printed as `[rag]` console lines and streamed as a `data-rag` part, then saved on `Message.trace`.
+- Query and context intelligence (`server/src/lib/rag/query-intelligence.ts`, `retrieval-quality.ts`, `context-intelligence.ts`, `answer-grounding.ts`, orchestrated by `server/src/services/rag-pipeline.service.ts` and `chat.service.ts`) uses `generateText` + `Output.object` on `RAG_INTELLIGENCE_MODEL` (`gpt-4o-mini`), even when the answer model is `gpt-4o`. Classification, HyDE, corrective rewrites, the coverage/contradiction judgement, and the output grounding judge go through this path. Embeddings stay on the `openai` SDK. The same steps are printed as `[rag]` console lines and streamed as a `data-rag` part, then saved on `Message.trace`.
 
 ### OpenAI SDK (`openai`) — embeddings only
 
 - The raw `openai` SDK is used for embeddings (`server/src/lib/openai.ts`). Chat and artifact generation go through the AI SDK (`@ai-sdk/openai`). Don't send chat completions through the embeddings client. Query embedding, HyDE passage embedding, multi-query embedding, and semantic-dedup embedding all go through `embedTexts`.
-- Input guardrails use a separate OpenAI client only for moderation and the jailbreak/off-topic classifiers. See `@openai/guardrails` below.
+- Input guardrails use a separate OpenAI client only for moderation and the jailbreak/off-topic classifiers. Output moderation uses that same kind of client. See `@openai/guardrails` below.
 
-### `@openai/guardrails` — chat input gate
+### `@openai/guardrails` — chat input and output gates
 
 - Installed on the server. Configuration lives in `server/src/config/guardrails_config.json`.
-- `server/src/lib/input-guardrails.ts` loads that file with `loadPipelineBundles` and runs `pre_flight`, then `input`, via `runGuardrails` before RAG or `streamText`. Output guardrails are empty.
+- `server/src/lib/input-guardrails.ts` loads that file with `loadPipelineBundles` and runs `pre_flight`, then `input`, via `runGuardrails` before RAG or `streamText`. It does not run the `output` bundle.
 - A tripwire throws `GuardrailTripwireTriggered`. `streamWorkspaceChat` maps it to `InputBlockedError` (HTTP 400, `{ code: "INPUT_BLOCKED", guardrail, message }`). `message` is the exact user text that was checked. The chat transport reads `error` from any non-OK JSON body and shows it in the existing banner, and puts `message` back in the composer.
 - Blocked messages are not saved, not charged, and do not create a conversation.
 - Pre-flight: Moderation, plus Contains PII in blocking mode (`block: true`, `detect_encoded_pii: false`) for `CREDIT_CARD`, `CVV`, `IBAN_CODE`, `BIC_SWIFT`, and `CRYPTO` only. Names, URLs, emails, and dates are not treated as secrets.
 - Input: Jailbreak and Off Topic Prompts (`gpt-4.1-mini`, confidence `0.7`). Both use `OPENAI_API_KEY`. A guardrail execution failure fails the request closed (`raiseGuardrailErrors: true`).
+- Output (`server/src/lib/output-guardrails.ts`) runs after `streamText` finishes and before any answer text is written to the client. The model token stream is not merged into the UI stream.
+- Output PII uses Contains PII with `block: false` and applies `checked_text` in our runner. Masking covers contact details, payment credentials, and government IDs listed in the output bundle. Names, places, dates, and URLs are not masked. The same mask is applied to citation excerpts. `detect_encoded_pii` stays false.
+- Output policy reuses the pre-flight Moderation categories. Output sensitive-data detection is Secret Keys at `balanced`. Either tripwire replaces the whole answer.
+- Grounding is not the package's Hallucination Detection check. That check requires an OpenAI vector store id. `server/src/lib/rag/answer-grounding.ts` scores claims against the Pinecone chunks and web snippets already retrieved, using `generateText` + `Output.object` on `RAG_INTELLIGENCE_MODEL`. Unsupported sentences are removed. If nothing supported remains, the saved reply is a short note that the sources do not support an answer. Turns with no retrieved evidence are not scored. A check that throws does not release the model text.
+- Coverage (`supported / total`) and each output decision are `[rag]` trace steps on the assistant message.
 - `tsc` does not emit the JSON config. `npm run build` copies it to `dist/config` so production (`node dist/index.js`) can load it next to the compiled module.
 - `EMBEDDING_MODEL = "text-embedding-3-small"`, `EMBEDDING_DIMENSIONS = 1536` (must match the Pinecone index dimension). `embedTexts(texts: string[])` batches internally is the caller's job (see `embedAndIndexSource`, batches of 50) — the function itself does not chunk large arrays.
 

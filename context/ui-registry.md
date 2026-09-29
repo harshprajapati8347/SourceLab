@@ -130,8 +130,8 @@ Generated shadcn/ui components (style `base-rhea`, built on `@base-ui/react`, ic
 | `ChatMessageBody` (`chat-message-body.tsx`) | Renders an assistant message's markdown text and inlines numbered `CitationMarker`s at cited positions |
 | `CitationMarker` (`citation-marker.tsx`) | Small pill button (`[1]`, `[2]`, …) inline in assistant text; hover reveals a `CitationPreview` |
 | `CitationPreview` (`citation-preview.tsx`) | Hover card body showing a citation's source title, excerpt, and a link to the source or URL |
-| `CitationSources` (`citation-sources.tsx`) | Row of unique source `Attachment` chips below an assistant message, each with a hover preview and a link to the source detail page or external URL |
-| `RagTracePanel` (`rag-trace-panel.tsx`) | Pipeline steps above an assistant reply. Each completed step expands to the values from that step (rewrite, HyDE, retrieval, CRAG, context). |
+| `CitationSources` (`citation-sources.tsx`) | Row of unique source `Attachment` chips below an assistant message. Chips are limited to citations still marked in the answer. Older messages with no flag still show every saved source. Each chip has a hover preview and a link to the source detail page or external URL |
+| `RagTracePanel` (`rag-trace-panel.tsx`) | Pipeline steps above an assistant reply. Each completed step expands to the values from that step (rewrite, HyDE, retrieval, CRAG, context, output PII, grounding, citations, coverage, policy, and sensitive data). |
 
 ### `features/learn/components/`
 | Component | Description |

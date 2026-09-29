@@ -42,10 +42,21 @@ export function parseCitations(value: unknown): ChatMessage["citations"] {
   }
 
   return value.filter(
-    (item): item is NonNullable<ChatMessage["citations"]>[number] =>
-      typeof item === "object" &&
-      item !== null &&
-      typeof (item as { sourceId?: unknown }).sourceId === "string" &&
-      typeof (item as { sourceTitle?: unknown }).sourceTitle === "string",
+    (item): item is NonNullable<ChatMessage["citations"]>[number] => {
+      if (typeof item !== "object" || item === null) {
+        return false;
+      }
+
+      const record = item as {
+        sourceTitle?: unknown;
+        sourceId?: unknown;
+        url?: unknown;
+      };
+
+      return (
+        typeof record.sourceTitle === "string" &&
+        (typeof record.sourceId === "string" || typeof record.url === "string")
+      );
+    },
   );
 }

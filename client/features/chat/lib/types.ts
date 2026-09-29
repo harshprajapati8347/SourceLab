@@ -8,6 +8,7 @@ export type ChatCitation = {
   excerpt: string;
   score?: number;
   url?: string;
+  cited?: boolean;
 };
 
 export type Conversation = {

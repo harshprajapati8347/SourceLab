@@ -9,6 +9,7 @@
  *   → save to DB
  *   → query intelligence, RAG retrieval, context processing + Mem0 memories
  *   → streamText (AI SDK) with optional web search tool
+ *   → output guardrails, then release the safe reply
  *   → save assistant reply + citations
  *   → optional summary job + Mem0 learning
  * ```
@@ -24,7 +25,6 @@ import {
   isStepCount,
   pipeUIMessageStreamToResponse,
   streamText,
-  toUIMessageStream,
   tool,
   type UIMessage,
 } from "ai";
@@ -35,8 +35,11 @@ import {
   RECENT_MESSAGE_WINDOW,
 } from "../lib/ai-config.js";
 import { enqueueConversationSummarize } from "../lib/conversation-events.js";
+import { groundAnswer } from "../lib/rag/answer-grounding.js";
+import { logRagEvent } from "../lib/rag/rag-log.js";
 import { buildChatSystemPrompt } from "../lib/rag/retrieve.js";
-import type { RagTrace } from "../lib/rag/rag-trace.js";
+import type { RagTrace, RagTraceStep } from "../lib/rag/rag-trace.js";
+import { logTraceStep } from "../lib/rag/rag-trace.js";
 import { runRagPipeline } from "./rag-pipeline.service.js";
 import {
   createConversationRecord,
@@ -63,6 +66,13 @@ import {
   assertChatInputAllowed,
   toInputBlockedError,
 } from "../lib/input-guardrails.js";
+import {
+  OUTPUT_CHECK_FAILED_MESSAGE,
+  checkOutputPolicy,
+  checkOutputSecrets,
+  maskOutputPii,
+  outputSpansAreDisclosable,
+} from "../lib/output-guardrails.js";
 import { checkAndDeductCredits } from "./credits.service.js";
 import { NotFoundError, ValidationError } from "../types/app-error.js";
 import {
@@ -209,8 +219,9 @@ async function resolveConversation(
  * 1. Validate user message and run input guardrails
  * 2. Resolve/create conversation and save the user message
  * 3. Parallel: query and context pipeline + Mem0 memory search
- * 4. Build system prompt and stream model response via AI SDK
- * 5. On finish: save assistant message, citations, title, summary job, Mem0 learning
+ * 4. Build system prompt and generate the model response via AI SDK
+ * 5. Mask PII, check grounding and citations, then run policy and secret checks
+ * 6. On finish: save the safe assistant message, citations, title, summary job, Mem0 learning
  *
  * @param res - Express response (streamed via `pipeUIMessageStreamToResponse`)
  * @param workspaceId - Workspace whose sources to search
@@ -286,6 +297,7 @@ export async function streamWorkspaceChat(
     excerpt: string;
     score?: number;
     url?: string;
+    cited?: boolean;
   }> = [];
   let trace: RagTrace = { steps: [] };
 
@@ -321,9 +333,10 @@ export async function streamWorkspaceChat(
         chunkId: chunk.chunkId,
         chunkIndex: chunk.chunkIndex,
         page: chunk.page,
-        excerpt: chunk.text.slice(0, 280),
+        excerpt: chunk.text,
         score: chunk.score,
       }));
+      const chunkCitations = citations.map((citation) => ({ ...citation }));
       webSearchResults = pipeline.webResults;
 
       const systemPrompt = buildChatSystemPrompt({
@@ -335,6 +348,24 @@ export async function streamWorkspaceChat(
         contradictions: pipeline.contradictions,
         weakEvidence: pipeline.weakEvidence,
       });
+
+      const pushStep = (step: RagTraceStep) => {
+        const steps = [...trace.steps];
+        const index = steps.findIndex((item) => item.id === step.id);
+        if (index === -1) {
+          steps.push(step);
+        } else {
+          steps[index] = step;
+        }
+
+        trace = { steps };
+        logTraceStep(step);
+        writer.write({
+          type: "data-rag",
+          id: "rag-trace",
+          data: trace,
+        });
+      };
 
       publishTrace({
         steps: [
@@ -349,6 +380,7 @@ export async function streamWorkspaceChat(
         ],
       });
       console.info("[rag] Generating → started");
+      const evidenceChunks = pipeline.chunks;
       const tools = webSearchEnabled
         ? {
             web_search: tool({
@@ -379,7 +411,170 @@ export async function streamWorkspaceChat(
         stopWhen: webSearchEnabled ? isStepCount(3) : undefined,
       });
 
-      writer.merge(toUIMessageStream({ stream: result.stream }));
+      const drafted = (await result.text).trim();
+      if (!drafted) {
+        pushStep({
+          id: "generating",
+          label: "Generating",
+          status: "done",
+          summary: "No answer",
+          lines: [],
+        });
+        return;
+      }
+
+      pushStep({
+        id: "generating",
+        label: "Generating",
+        status: "done",
+        summary: "Checking the answer",
+        lines: [],
+      });
+
+      let finalText = OUTPUT_CHECK_FAILED_MESSAGE;
+
+      try {
+        pushStep({
+          id: "output-pii",
+          label: "Output PII",
+          status: "active",
+          summary: "Masking sensitive details",
+          lines: [],
+        });
+        const pii = await maskOutputPii(drafted);
+        pushStep({
+          id: "output-pii",
+          label: "Output PII",
+          status: "done",
+          summary: pii.summary,
+          lines: pii.lines,
+        });
+
+        pushStep({
+          id: "grounding",
+          label: "Grounding",
+          status: "active",
+          summary: "Checking claims",
+          lines: [],
+        });
+        const grounded = await groundAnswer({
+          question: userText,
+          answer: pii.text,
+          chunks: evidenceChunks.map((chunk) => ({
+            title: chunk.sourceTitle,
+            text: chunk.text,
+          })),
+          webResults: (webSearchResults?.results ?? []).map((item) => ({
+            title: item.title,
+            text: item.content,
+          })),
+        });
+
+        const policy = await checkOutputPolicy(grounded.text);
+        let released = policy.text;
+        const secrets = await checkOutputSecrets(released);
+        if (secrets.blocked) {
+          released = secrets.text;
+        }
+
+        const quoteClaims =
+          !policy.blocked &&
+          !secrets.blocked &&
+          (await outputSpansAreDisclosable(
+            grounded.claims.map((claim) => claim.span).join("\n"),
+          ));
+
+        pushStep({
+          id: "grounding",
+          label: "Grounding",
+          status: "done",
+          summary: grounded.grounding.summary,
+          lines: grounded.grounding.lines,
+        });
+        pushStep({
+          id: "citations",
+          label: "Citations",
+          status: "done",
+          summary: grounded.citations.summary,
+          lines: quoteClaims
+            ? grounded.citations.lines
+            : grounded.citations.safeLines,
+        });
+        pushStep({
+          id: "coverage",
+          label: "Coverage",
+          status: "done",
+          summary: grounded.coverage.summary,
+          lines: grounded.coverage.lines,
+        });
+        pushStep({
+          id: "policy",
+          label: "Policy",
+          status: "done",
+          summary: policy.summary,
+          lines: policy.lines,
+        });
+        pushStep({
+          id: "sensitive",
+          label: "Sensitive data",
+          status: "done",
+          summary: secrets.summary,
+          lines: secrets.lines,
+        });
+
+        finalText = released;
+        citations = await maskCitationExcerpts(
+          assembleCitations({
+            chunks: chunkCitations,
+            webResults: webSearchResults,
+            answer: finalText,
+          }),
+        );
+      } catch (error) {
+        logRagEvent("output-check", {
+          failed: true,
+          error: error instanceof Error ? error.name : "Error",
+        });
+        finalText = OUTPUT_CHECK_FAILED_MESSAGE;
+        citations = clearCitationExcerpts(
+          assembleCitations({
+            chunks: chunkCitations,
+            webResults: webSearchResults,
+            answer: finalText,
+          }),
+        );
+        const active = trace.steps.filter((step) => step.status === "active");
+        if (active.length > 0) {
+          for (const step of active) {
+            pushStep({
+              ...step,
+              status: "done",
+              summary: "Check failed",
+              lines: [
+                "The answer was withheld because a check could not finish.",
+              ],
+            });
+          }
+        } else {
+          pushStep({
+            id: "output-check",
+            label: "Output check",
+            status: "done",
+            summary: "Check failed",
+            lines: [
+              "The answer was withheld because a check could not finish.",
+            ],
+          });
+        }
+      }
+
+      writer.write({ type: "text-start", id: "assistant-text" });
+      writer.write({
+        type: "text-delta",
+        id: "assistant-text",
+        delta: finalText,
+      });
+      writer.write({ type: "text-end", id: "assistant-text" });
     },
     onFinish: async ({ responseMessage, isAborted }) => {
       if (isAborted) {
@@ -391,23 +586,13 @@ export async function streamWorkspaceChat(
         return;
       }
 
-      const webCitations = webSearchResults
-        ? webSearchResults.results.map((result) => ({
-            sourceType: "WEB" as const,
-            sourceTitle: result.title,
-            url: result.url,
-            excerpt: result.content.slice(0, 280),
-          }))
-        : [];
-      const allCitations = [...citations, ...webCitations];
-
       console.info("[rag] Generating → Answer complete");
 
       await createMessageRecord({
         conversationId: conversation.id,
         role: "ASSISTANT",
         content: assistantText,
-        citations: allCitations,
+        citations,
         trace: {
           steps: trace.steps.map((step) =>
             step.id === "generating"
@@ -475,4 +660,86 @@ function formatRecentTurns(messages: UIMessage[]) {
     })
     .filter((turn) => turn !== null)
     .join("\n");
+}
+
+type SavedCitation = {
+  sourceId?: string;
+  sourceTitle: string;
+  sourceType: string;
+  chunkId?: string;
+  chunkIndex?: number;
+  page?: number;
+  excerpt: string;
+  score?: number;
+  url?: string;
+  cited?: boolean;
+};
+
+/**
+ * Keeps retrieved citations in prompt order and marks the ones still in the answer.
+ *
+ * Workspace markers use `[1]`. Web markers use `[W1]` and follow the web result order.
+ *
+ * @param input - Chunk citations, web results, and the text that will be saved
+ * @returns Citations in the order inline markers expect
+ */
+function assembleCitations(input: {
+  chunks: SavedCitation[];
+  webResults: TavilySearchResponse | null;
+  answer: string;
+}): SavedCitation[] {
+  const markers = new Set(
+    [...input.answer.matchAll(/\[(W?\d+)\]/g)]
+      .map((match) => match[1])
+      .filter((marker): marker is string => typeof marker === "string"),
+  );
+
+  const chunks = input.chunks.map((citation, index) => ({
+    ...citation,
+    cited: markers.has(String(index + 1)),
+  }));
+  const web = (input.webResults?.results ?? []).map((result, index) => ({
+    sourceType: "WEB",
+    sourceTitle: result.title,
+    url: result.url,
+    excerpt: result.content,
+    cited: markers.has(`W${index + 1}`),
+  }));
+
+  return [...chunks, ...web];
+}
+
+/**
+ * Masks PII in the full excerpt, then keeps the first 280 characters.
+ *
+ * Masking runs on the full excerpt first. The saved preview is the first 280 characters of that masked text.
+ *
+ * @param items - Citations about to be saved
+ * @returns The same citations with masked, shortened excerpts
+ */
+async function maskCitationExcerpts(items: SavedCitation[]) {
+  return Promise.all(
+    items.map(async (citation) => {
+      if (!citation.excerpt.trim()) {
+        return citation;
+      }
+
+      const masked = await maskOutputPii(citation.excerpt);
+      return { ...citation, excerpt: masked.text.slice(0, 280) };
+    }),
+  );
+}
+
+/**
+ * Drops excerpt text when an output check fails closed.
+ *
+ * @param items - Citations assembled for the withheld answer
+ * @returns Citations with empty excerpts and no cited markers
+ */
+function clearCitationExcerpts(items: SavedCitation[]): SavedCitation[] {
+  return items.map((citation) => ({
+    ...citation,
+    excerpt: "",
+    cited: false,
+  }));
 }

@@ -63,6 +63,61 @@
   },
   "output": {
     "version": 1,
-    "guardrails": []
+    "guardrails": [
+      {
+        "name": "Contains PII",
+        "config": {
+          "block": false,
+          "detect_encoded_pii": false,
+          "entities": [
+            "EMAIL_ADDRESS",
+            "PHONE_NUMBER",
+            "CREDIT_CARD",
+            "CVV",
+            "IBAN_CODE",
+            "BIC_SWIFT",
+            "CRYPTO",
+            "US_BANK_NUMBER",
+            "US_SSN",
+            "US_ITIN",
+            "US_PASSPORT",
+            "US_DRIVER_LICENSE",
+            "IN_AADHAAR",
+            "IN_PAN",
+            "IN_PASSPORT",
+            "IN_VOTER",
+            "UK_NHS",
+            "UK_NINO",
+            "MEDICAL_LICENSE"
+          ]
+        }
+      },
+      {
+        "name": "Moderation",
+        "config": {
+          "categories": [
+            "sexual",
+            "sexual/minors",
+            "hate",
+            "hate/threatening",
+            "harassment",
+            "harassment/threatening",
+            "self-harm",
+            "self-harm/intent",
+            "self-harm/instructions",
+            "violence",
+            "violence/graphic",
+            "illicit",
+            "illicit/violent"
+          ]
+        }
+      },
+      {
+        "name": "Secret Keys",
+        "config": {
+          "threshold": "balanced"
+        }
+      }
+    ]
   }
 }

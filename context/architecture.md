@@ -175,11 +175,16 @@ streamWorkspaceChat() continues:
   - buildChatSystemPrompt() from compressed chunks, authority metadata, conflicts,
     memories, summary, weak-evidence note, and any corrective web results
   - the same steps are logged as `[rag]` console lines and streamed as a `data-rag` message part
-  - streamText() (AI SDK) with optional web_search tool (Tavily)
-  - onFinish: save assistant Message + citations (workspace chunks that remained, plus web results),
+  - streamText() (AI SDK) with optional web_search tool (Tavily) runs on the server
+  - output guardrails then mask PII, score claims against the retrieved chunks and web
+    snippets, and run moderation plus secret-key checks
+  - only the safe text is written to the UI stream, with coverage and each decision
+    added to the same `data-rag` trace
+  - onFinish: save that safe assistant Message + citations (workspace chunks and web
+              results, excerpts masked, `cited` set from markers that remain),
               touch conversation, auto-title if new,
               every CONVERSATION_SUMMARY_INTERVAL (8) messages → enqueue conversation/summarize,
-              fire-and-forget Mem0 addMemoriesFromMessages()
+              fire-and-forget Mem0 addMemoriesFromMessages() with the safe text
         ↓
 Response headers include X-Conversation-Id so the client can adopt a newly created conversation
 ```
@@ -268,7 +273,7 @@ Auth tables (`user`, `session`, `account`, `verification`, `subscription`) are o
 | conversationId | String | FK → conversation, cascade delete |
 | role | enum `MessageRole` | `USER \| ASSISTANT` |
 | content | String | Plain text |
-| citations | Json? | Array of `{ sourceId, sourceTitle, sourceType, chunkId, chunkIndex, page?, excerpt, score? }` or web citations `{ sourceType: "WEB", sourceTitle, url, excerpt }` |
+| citations | Json? | Array of `{ sourceId, sourceTitle, sourceType, chunkId, chunkIndex, page?, excerpt, score?, cited? }` or web citations `{ sourceType: "WEB", sourceTitle, url, excerpt, cited? }`. `cited` is false when the final answer no longer uses that marker. Excerpts are masked for PII. |
 | trace | Json? | Retrieval steps shown in chat: `{ steps: [{ id, label, status, summary, lines }] }` |
 
 ### `learning_artifact`
