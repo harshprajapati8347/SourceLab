@@ -165,12 +165,15 @@ streamWorkspaceChat():
         ↓
 runRagPipeline():
   - gpt-4o-mini classifies the latest message (summary + recent turns) and routes transforms
-  - conversational / out-of-domain: skip workspace retrieval
+  - conversational: skip workspace retrieval. Out-of-domain questions are still searched
+  - a short "yes" after a web-research offer searches the web for that topic when the toggle is on
   - otherwise embed one or more queries (HyDE passage + query for simple factual and ambiguous;
     sub-questions for multi-hop, analytical, and comparative) → Pinecone, merge by chunk id
   - load source rows for authority + indexedAt, then score relevance, coverage, freshness,
-    authority, and duplication. Below 0.55: one rewrite/expand pass at a relaxed score floor,
-    then Tavily only when the web-search toggle is already on
+    authority, and duplication. Below 0.55, or when the passages miss the topic: one rewrite/expand
+    pass at a relaxed score floor. If the sources still do not cover the question, the reply names
+    the gap, the notebook's focus, and offers web research when the toggle is on. Tavily runs
+    immediately only for a weak but on-topic retrieval when web search is already enabled
   - semantic dedup, extractive compression, contradiction notes. Chunk text stays verbatim
   - on classifier, HyDE, or coverage-judgement failure: fall open to one top-6 retrieval of the original message
         ↓
@@ -180,7 +183,7 @@ streamWorkspaceChat() continues:
   - the same steps are logged as `[rag]` console lines. They are streamed as a `data-rag` part only when `RAG_TRACE_ENABLED=true`
   - streamText() (AI SDK) with optional web_search tool (Tavily) runs on the server. Later web searches append to the same `[W#]` list
   - output guardrails then mask PII, keep cited paraphrases, redact real credentials in place, and run moderation
-  - only the safe text is written to the UI stream, with citations. Coverage is added to the trace when that trace is enabled
+  - only the safe text is written to the UI stream, with citations. Up to three short follow-up questions are streamed as `data-suggestions` and stored on the message trace. Coverage is added to the trace when that trace is enabled
   - onFinish: save that safe assistant Message + citations (workspace chunks and web
               results, excerpts masked, `cited` set from markers that remain),
               touch conversation, auto-title if new,

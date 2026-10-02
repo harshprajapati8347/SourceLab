@@ -39,6 +39,11 @@ import { enqueueConversationSummarize } from "../lib/conversation-events.js";
 import { groundAnswer } from "../lib/rag/answer-grounding.js";
 import { logRagEvent } from "../lib/rag/rag-log.js";
 import { buildChatSystemPrompt } from "../lib/rag/retrieve.js";
+import {
+  readStoredSuggestions,
+  suggestFollowUpQuestions,
+  type NotebookPassage,
+} from "../lib/rag/suggested-questions.js";
 import type { RagTrace, RagTraceStep } from "../lib/rag/rag-trace.js";
 import { isRagTraceEnabled, logTraceStep } from "../lib/rag/rag-trace.js";
 import { runRagPipeline } from "./rag-pipeline.service.js";
@@ -69,6 +74,7 @@ import {
 } from "../lib/input-guardrails.js";
 import {
   OUTPUT_CHECK_FAILED_MESSAGE,
+  OUTPUT_POLICY_MESSAGE,
   checkOutputPolicy,
   checkOutputSecrets,
   maskOutputPii,
@@ -147,13 +153,12 @@ export async function getConversationMessagesForWorkspace(
   }
 
   const messages = await findMessagesByConversationId(conversationId);
-  if (isRagTraceEnabled()) {
-    return messages;
-  }
+  const includeTrace = isRagTraceEnabled();
 
   return messages.map((message) => ({
     ...message,
-    trace: null,
+    trace: includeTrace ? message.trace : null,
+    suggestions: readStoredSuggestions(message.trace),
   }));
 }
 
@@ -306,6 +311,7 @@ export async function streamWorkspaceChat(
       : input.messages;
 
   let webSearchResults: TavilySearchResponse | null = null;
+  let suggestions: string[] = [];
   let citations: Array<{
     sourceId?: string;
     sourceTitle: string;
@@ -373,6 +379,7 @@ export async function streamWorkspaceChat(
         overview:
           pipeline.queryClass === "summarization" &&
           pipeline.chunks.length > 0,
+        researchTopic: pipeline.researchTopic,
       });
 
       const pushStep = (step: RagTraceStep) => {
@@ -397,60 +404,72 @@ export async function streamWorkspaceChat(
         });
       };
 
-      publishTrace({
-        steps: [
-          ...pipeline.trace.steps,
-          {
-            id: "generating",
-            label: "Generating",
-            status: "active",
-            summary: "Writing the answer",
-            lines: [],
-          },
-        ],
-      });
-      console.info("[rag] Generating → started");
       const evidenceChunks = pipeline.chunks;
-      const tools = webSearchEnabled
-        ? {
-            web_search: tool({
-              description:
-                "Search the web for up-to-date information outside the workspace sources. Cite the [W#] markers in the result. They continue any web results already in the prompt and match the links shown to the user.",
-              inputSchema: z.object({
-                query: z
-                  .string()
-                  .describe("The search query for current web information"),
+      let drafted = pipeline.directReply?.trim() ?? "";
+
+      if (drafted) {
+        pushStep({
+          id: "generating",
+          label: "Generating",
+          status: "done",
+          summary: "Prepared from the notebook",
+          lines: [],
+        });
+      } else {
+        publishTrace({
+          steps: [
+            ...pipeline.trace.steps,
+            {
+              id: "generating",
+              label: "Generating",
+              status: "active",
+              summary: "Writing the answer",
+              lines: [],
+            },
+          ],
+        });
+        console.info("[rag] Generating → started");
+        const tools = webSearchEnabled
+          ? {
+              web_search: tool({
+                description:
+                  "Search the web for up-to-date information outside the workspace sources. Cite the [W#] markers in the result. They continue any web results already in the prompt and match the links shown to the user.",
+                inputSchema: z.object({
+                  query: z
+                    .string()
+                    .describe("The search query for current web information"),
+                }),
+                execute: async ({ query }) => {
+                  const results = await searchWeb(query);
+                  const before = webSearchResults?.results.length ?? 0;
+                  webSearchResults = mergeWebSearchResults(
+                    webSearchResults,
+                    results,
+                  );
+                  const added = webSearchResults.results.slice(before);
+                  if (added.length === 0) {
+                    return "No new web results were found. Keep citing the [W#] pages already listed.";
+                  }
+
+                  return formatTavilyResultsForPrompt(
+                    { ...webSearchResults, results: added },
+                    before,
+                  );
+                },
               }),
-              execute: async ({ query }) => {
-                const results = await searchWeb(query);
-                const before = webSearchResults?.results.length ?? 0;
-                webSearchResults = mergeWebSearchResults(
-                  webSearchResults,
-                  results,
-                );
-                const added = webSearchResults.results.slice(before);
-                if (added.length === 0) {
-                  return "No new web results were found. Keep citing the [W#] pages already listed.";
-                }
+            }
+          : undefined;
 
-                return formatTavilyResultsForPrompt(
-                  { ...webSearchResults, results: added },
-                  before,
-                );
-              },
-            }),
-          }
-        : undefined;
+        const result = streamText({
+          model: openai(chatModel),
+          system: systemPrompt,
+          messages: await convertToModelMessages(contextMessages),
+          tools,
+          stopWhen: webSearchEnabled ? isStepCount(3) : undefined,
+        });
 
-      const result = streamText({
-        model: openai(chatModel),
-        system: systemPrompt,
-        messages: await convertToModelMessages(contextMessages),
-        tools,
-        stopWhen: webSearchEnabled ? isStepCount(3) : undefined,
-      });
-
-      const drafted = (await result.text).trim();
+        drafted = (await result.text).trim();
+      }
       if (!drafted) {
         pushStep({
           id: "generating",
@@ -604,11 +623,42 @@ export async function streamWorkspaceChat(
         }
       }
 
+      if (
+        finalText !== OUTPUT_CHECK_FAILED_MESSAGE &&
+        finalText !== OUTPUT_POLICY_MESSAGE
+      ) {
+        const prepared = pipeline.suggestions ?? [];
+        const passages = passagesForSuggestions(
+          evidenceChunks,
+          webSearchResults,
+          pipeline.sourceSamples,
+        );
+        if (prepared.length > 0) {
+          suggestions = prepared;
+        } else if (passages.length > 0 || pipeline.researchTopic) {
+          suggestions = await suggestFollowUpQuestions({
+            question: pipeline.researchTopic ?? userText,
+            answer: finalText,
+            passages,
+            preferNotebook:
+              evidenceChunks.length === 0 &&
+              (webSearchResults?.results.length ?? 0) === 0,
+          });
+        }
+      }
+
       writer.write({
         type: "data-citations",
         id: "citations",
         data: citations,
       });
+      if (suggestions.length > 0) {
+        writer.write({
+          type: "data-suggestions",
+          id: "suggestions",
+          data: suggestions,
+        });
+      }
       writer.write({ type: "text-start", id: "assistant-text" });
       writer.write({
         type: "text-delta",
@@ -640,6 +690,7 @@ export async function streamWorkspaceChat(
               ? { ...step, status: "done", summary: "Answer complete" }
               : step,
           ),
+          suggestions,
         },
       });
 
@@ -683,6 +734,27 @@ export async function streamWorkspaceChat(
       "X-Conversation-Id": conversation.id,
     },
   });
+}
+
+function passagesForSuggestions(
+  chunks: Array<{ sourceTitle: string; text: string }>,
+  webResults: TavilySearchResponse | null,
+  samples: NotebookPassage[],
+): NotebookPassage[] {
+  const fromChunks = chunks.map((chunk) => ({
+    title: chunk.sourceTitle,
+    text: chunk.text.slice(0, 700),
+  }));
+  const fromWeb = (webResults?.results ?? []).map((result) => ({
+    title: result.title,
+    text: result.content.slice(0, 700),
+  }));
+
+  if (fromChunks.length > 0 || fromWeb.length > 0) {
+    return [...fromChunks, ...fromWeb];
+  }
+
+  return samples;
 }
 
 function formatRecentTurns(messages: UIMessage[]) {

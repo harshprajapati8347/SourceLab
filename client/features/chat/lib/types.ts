@@ -26,5 +26,6 @@ export type ChatMessage = {
   content: string;
   citations: ChatCitation[] | null;
   trace?: unknown;
+  suggestions?: string[];
   createdAt: string;
 };

@@ -11,6 +11,7 @@ import {
   RAG_DEDUP_THRESHOLD,
   RAG_NEUTRAL_FRESHNESS,
   RAG_QUALITY_GATE,
+  RAG_TOPIC_COVERAGE_FLOOR,
 } from "../lib/ai-config.js";
 import {
   enrichChunksWithSources,
@@ -41,6 +42,20 @@ import {
   type RetrievedChunk,
 } from "../lib/rag/retrieve.js";
 import {
+  describeNotebookGap,
+  type NotebookPassage,
+  suggestFollowUpQuestions,
+} from "../lib/rag/suggested-questions.js";
+import {
+  acceptsWebResearch,
+  buildUncoveredTopicReply,
+  focusFromTitles,
+  pendingWebResearchTopic,
+  questionTermsMissing,
+  sourcesMissTopic,
+  topicFromQuestion,
+} from "../lib/rag/topic-gap.js";
+import {
   evaluateRetrievalQuality,
   type Contradiction,
   type RetrievalQuality,
@@ -64,6 +79,17 @@ export type RagPipelineResult = {
   queryClass: QueryClass;
   transforms: QueryTransform[];
   trace: RagTrace;
+  /** Set when the reply is written without the chat model. */
+  directReply: string | null;
+  /** Set when the user accepted an offer to research this topic on the web. */
+  researchTopic: string | null;
+  /** Notebook passages used to describe a gap. Empty on a normal answer. */
+  sourceSamples: NotebookPassage[];
+  /**
+   * Follow-up questions already chosen for a gap reply.
+   * Null means the chat service should suggest them after the answer is written.
+   */
+  suggestions: string[] | null;
 };
 
 /**
@@ -93,6 +119,11 @@ export async function runRagPipeline(input: {
     summary: "Latest user message",
     lines: [input.userText],
   });
+
+  const acceptedTopic = pendingWebResearchTopic(input.recentTurns ?? "");
+  if (acceptedTopic && acceptsWebResearch(input.userText)) {
+    return answerAcceptedResearch(input, acceptedTopic, trace);
+  }
 
   const plan = await planQuery({
     userText: input.userText,
@@ -144,9 +175,7 @@ export async function runRagPipeline(input: {
       status: "done",
       summary: "Workspace retrieval skipped",
       lines: [
-        plan.queryClass === "conversational"
-          ? "Conversational messages are not searched."
-          : "Out-of-domain messages are not searched in the workspace.",
+        "Conversational messages are not searched.",
       ],
     });
     return finish(trace, {
@@ -246,9 +275,14 @@ export async function runRagPipeline(input: {
   }
 
   const initialGateScore = quality.gateScore;
+  const initialCoverage = quality.dimensions.coverage;
+  const initialMiss = topicMissed(input.userText, quality);
   recordQuality(trace, quality, "Initial retrieval");
 
-  if (quality.gateScore < RAG_QUALITY_GATE) {
+  const needsAnotherPass =
+    quality.gateScore < RAG_QUALITY_GATE || initialMiss;
+
+  if (needsAnotherPass) {
     const corrective = await planCorrectiveQueries(input.userText, () => {
       trace.step({
         id: "expansion",
@@ -303,11 +337,41 @@ export async function runRagPipeline(input: {
     });
 
     const cragLines = [
-      `Triggered because the gate was ${formatScore(initialGateScore)}, below ${RAG_QUALITY_GATE}.`,
+      initialGateScore < RAG_QUALITY_GATE
+        ? `Triggered because the gate was ${formatScore(initialGateScore)}, below ${RAG_QUALITY_GATE}.`
+        : `Triggered because the sources do not cover the question (coverage ${formatScore(initialCoverage)}).`,
       `Rewrite: ${corrective.rewrittenQuery}`,
       ...corrective.retrievalQueries.map(previewQuery),
       `Gate after workspace retry: ${formatScore(quality.gateScore)}.`,
+      `Coverage after workspace retry: ${formatScore(quality.dimensions.coverage)}.`,
     ];
+
+    if (topicMissed(input.userText, quality)) {
+      trace.step({
+        id: "crag",
+        label: "CRAG",
+        status: "done",
+        summary: "Sources don't cover this question",
+        lines: [
+          ...cragLines,
+          "Web search waits until the user accepts it.",
+        ],
+      });
+      recordQuality(
+        trace,
+        quality,
+        "After corrective retrieval",
+        "quality-final",
+      );
+      return finishUncovered(
+        input,
+        plan,
+        transforms,
+        trace,
+        quality.uniqueChunks,
+        quality.dimensions.coverage,
+      );
+    }
 
     if (quality.gateScore < RAG_QUALITY_GATE && input.webSearchEnabled) {
       try {
@@ -589,9 +653,220 @@ const QUERY_CLASS_LABELS: Record<QueryClass, string> = {
 
 function finish(
   trace: RagTraceRecorder,
-  result: Omit<RagPipelineResult, "trace">,
+  result: Omit<
+    RagPipelineResult,
+    "trace" | "directReply" | "researchTopic" | "sourceSamples" | "suggestions"
+  > &
+    Partial<
+      Pick<
+        RagPipelineResult,
+        "directReply" | "researchTopic" | "sourceSamples" | "suggestions"
+      >
+    >,
 ): RagPipelineResult {
-  return { ...result, trace: trace.snapshot() };
+  return {
+    directReply: null,
+    researchTopic: null,
+    sourceSamples: [],
+    suggestions: null,
+    ...result,
+    trace: trace.snapshot(),
+  };
+}
+
+function topicMissed(
+  question: string,
+  quality: Pick<RetrievalQuality, "dimensions" | "uniqueChunks">,
+) {
+  return (
+    sourcesMissTopic(quality.dimensions.coverage) ||
+    questionTermsMissing(
+      question,
+      quality.uniqueChunks.map((chunk) => chunk.text),
+    )
+  );
+}
+
+async function loadNotebookSamples(
+  workspaceId: string,
+  chunks: EnrichedChunk[],
+): Promise<NotebookPassage[]> {
+  if (chunks.length > 0) {
+    return chunks.slice(0, 6).map((chunk) => ({
+      title: chunk.sourceTitle,
+      text: chunk.text.slice(0, 700),
+    }));
+  }
+
+  try {
+    const sources = await findReadySourcesWithChunks(workspaceId);
+    const overview = selectOverviewChunks(sources, 4000);
+    return overview.chunks.slice(0, 6).map((chunk) => ({
+      title: chunk.sourceTitle,
+      text: chunk.text.slice(0, 700),
+    }));
+  } catch {
+    logRagEvent("suggestions", { samplesFailed: true });
+    return [];
+  }
+}
+
+async function finishUncovered(
+  input: {
+    workspaceId: string;
+    userText: string;
+    webSearchEnabled: boolean;
+  },
+  plan: QueryPlan,
+  transforms: QueryTransform[],
+  trace: RagTraceRecorder,
+  chunks: EnrichedChunk[],
+  coverage: number,
+): Promise<RagPipelineResult> {
+  const samples = await loadNotebookSamples(input.workspaceId, chunks);
+  const topic = topicFromQuestion(input.userText);
+  const described = await describeNotebookGap({ topic, passages: samples });
+  const focus =
+    described.focus ?? focusFromTitles(samples.map((sample) => sample.title));
+
+  trace.step({
+    id: "source-coverage",
+    label: "Source coverage",
+    status: "done",
+    summary: `Not covered: ${topic}`,
+    lines: [
+      `Coverage ${formatScore(coverage)} is below ${RAG_TOPIC_COVERAGE_FLOOR}, or the passages do not mention the topic.`,
+      focus ? `Notebook focus: ${focus}` : "No ready source text to describe.",
+      input.webSearchEnabled
+        ? "Offered web research."
+        : "Web search is off, so the reply asks the user to turn it on.",
+    ],
+  });
+
+  return finish(trace, {
+    chunks: [],
+    contradictions: [],
+    gateScore: coverage,
+    weakEvidence: true,
+    webResults: null,
+    queryClass: plan.queryClass,
+    transforms,
+    directReply: buildUncoveredTopicReply({
+      topic,
+      focus,
+      webSearchEnabled: input.webSearchEnabled,
+    }),
+    suggestions: described.questions,
+    sourceSamples: samples,
+  });
+}
+
+async function answerAcceptedResearch(
+  input: {
+    workspaceId: string;
+    webSearchEnabled: boolean;
+  },
+  topic: string,
+  trace: RagTraceRecorder,
+): Promise<RagPipelineResult> {
+  trace.step({
+    id: "classified",
+    label: "Classified",
+    status: "done",
+    summary: "Web research accepted",
+    lines: [`Topic: ${topic}`],
+  });
+
+  if (!input.webSearchEnabled) {
+    const samples = await loadNotebookSamples(input.workspaceId, []);
+    const questions = await suggestFollowUpQuestions({
+      question: topic,
+      answer: `The notebook does not cover ${topic}.`,
+      passages: samples,
+      preferNotebook: true,
+    });
+    trace.step({
+      id: "source-coverage",
+      label: "Source coverage",
+      status: "done",
+      summary: "Web search is off",
+      lines: ["The user agreed to research, and the web search toggle is off."],
+    });
+    return finish(trace, {
+      chunks: [],
+      contradictions: [],
+      gateScore: 0,
+      weakEvidence: true,
+      webResults: null,
+      queryClass: "simple_factual",
+      transforms: [],
+      directReply: `Web search is off. Turn it on and ask again, and I'll research ${topic}.`,
+      suggestions: questions,
+      sourceSamples: samples,
+    });
+  }
+
+  trace.step({
+    id: "crag",
+    label: "CRAG",
+    status: "active",
+    summary: "Searching the web",
+    lines: [topic],
+  });
+
+  try {
+    const webResults = await searchWeb(topic);
+    trace.step({
+      id: "crag",
+      label: "CRAG",
+      status: "done",
+      summary: `${webResults.results.length} web ${webResults.results.length === 1 ? "result" : "results"}`,
+      lines: webResults.results.map((item) => item.title),
+    });
+
+    if (webResults.results.length === 0) {
+      return finish(trace, {
+        chunks: [],
+        contradictions: [],
+        gateScore: 0,
+        weakEvidence: true,
+        webResults: null,
+        queryClass: "simple_factual",
+        transforms: [],
+        directReply: `I couldn't find web results on ${topic}. Try again in a moment.`,
+      });
+    }
+
+    return finish(trace, {
+      chunks: [],
+      contradictions: [],
+      gateScore: 1,
+      weakEvidence: false,
+      webResults,
+      queryClass: "simple_factual",
+      transforms: [],
+      researchTopic: topic,
+    });
+  } catch {
+    logRagEvent("web-research", { failed: true });
+    trace.step({
+      id: "crag",
+      label: "CRAG",
+      status: "done",
+      summary: "Web search failed",
+      lines: ["The search did not return results."],
+    });
+    return finish(trace, {
+      chunks: [],
+      contradictions: [],
+      gateScore: 0,
+      weakEvidence: true,
+      webResults: null,
+      queryClass: "simple_factual",
+      transforms: [],
+      directReply: `I couldn't complete web research on ${topic}. Try again in a moment.`,
+    });
+  }
 }
 
 function recordPlanSteps(trace: RagTraceRecorder, plan: QueryPlan) {

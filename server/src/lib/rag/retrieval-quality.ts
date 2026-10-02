@@ -2,9 +2,9 @@
  * Retrieval-quality gate.
  *
  * Relevance, freshness, authority, and duplication are computed in code.
- * Coverage and contradiction share one structured model call when more than
- * one piece of evidence is present. Contradiction is reported and excluded
- * from the gate average.
+ * Coverage and contradiction share one structured model call whenever any
+ * evidence was retrieved, including a single chunk. Contradiction is reported
+ * and excluded from the gate average.
  */
 
 import { openai } from "@ai-sdk/openai";
@@ -110,10 +110,10 @@ export async function evaluateRetrievalQuality(input: {
       : 1 - deduped.removedCount / input.chunks.length;
   const evidenceCount = uniqueChunks.length + webSnippets.length;
   const judged =
-    evidenceCount > 1
+    evidenceCount > 0
       ? await judgeEvidence(input.query, uniqueChunks, webSnippets, relevance)
       : {
-          coverage: evidenceCount === 1 ? 1 : 0,
+          coverage: 0,
           contradictions: [] as Contradiction[],
           judgementFailed: false,
         };

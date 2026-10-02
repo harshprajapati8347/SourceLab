@@ -31,6 +31,12 @@ export const RAG_INTELLIGENCE_MODEL = "gpt-4o-mini";
  */
 export const RAG_QUALITY_GATE = 0.55;
 
+/**
+ * Coverage below this means the retrieved passages do not answer the question.
+ * The reply names that gap instead of stopping at a refusal.
+ */
+export const RAG_TOPIC_COVERAGE_FLOOR = 0.35;
+
 /** Similarity floor used only on the corrective retrieval pass. */
 export const RAG_CORRECTIVE_MIN_SCORE = 0.25;
 

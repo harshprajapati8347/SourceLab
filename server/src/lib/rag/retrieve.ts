@@ -164,6 +164,7 @@ export function buildChatSystemPrompt(input: {
   contradictions?: Contradiction[];
   weakEvidence?: boolean;
   overview?: boolean;
+  researchTopic?: string | null;
 }) {
   const sections: string[] = [
     "You are SourceLab, an assistant that helps users learn from their workspace sources.",
@@ -211,7 +212,21 @@ export function buildChatSystemPrompt(input: {
     sections.push(contradictions);
   }
 
+  if (input.researchTopic) {
+    sections.push(
+      `The user agreed to web research on ${input.researchTopic}.`,
+      "Answer that question from the web results below.",
+      "Write each factual claim as its own sentence, with its [W#] marker in that sentence.",
+      "Do not invent web markers or URLs.",
+    );
+  }
+
   if (input.chunks.length === 0) {
+    if (input.researchTopic) {
+      appendWebResults(sections, input.webResults);
+      return sections.join("\n");
+    }
+
     const prefetchedWeb = (input.webResults?.results.length ?? 0) > 0;
     sections.push(
       "This workspace has no indexed source content yet, or nothing relevant was retrieved.",

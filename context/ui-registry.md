@@ -144,6 +144,7 @@ Hook: `useSignOut` (`hooks/use-sign-out.ts`). `app/(auth)/layout.tsx` is a split
 | `WorkspaceChat` (`workspace-chat.tsx`) | Chat page: resumes the latest conversation; New Chat (or an empty notebook) is the only way to start another. Switcher, export, confirmed delete, message list, "Searching your sources" wait state, composer. Web-search citations render on the live reply. At 10 stored messages a `bg-muted/40` strip asks for a new chat. Guardrail blocks restore the draft via `InputBlockedError` |
 | `ChatComposer` (`chat-composer.tsx`) | Auto-growing textarea in a focus-ring box, web-search on/off toggle, send button, shortcut hints. The toggle label follows the persisted preference immediately. Carries `data-chat-input` for Cmd/Ctrl+/ |
 | `ChatEmptyState` (`chat-empty-state.tsx`) | Empty thread: no sources gives an "Add your first source" action; otherwise starter prompt chips |
+| `SuggestedQuestions` (`suggested-questions.tsx`) | Up to three short next questions under the latest assistant reply. The whole card sends that question. Hidden while a reply is streaming and on older messages |
 | `SourceStatusBanner` (`source-status-banner.tsx`) | Non-blocking strip above the composer for indexing or failed sources |
 | `ChatMessageBody` (`chat-message-body.tsx`) | Assistant Markdown with inline `CitationMarker`s |
 | `CitationMarker` (`citation-marker.tsx`) | Mono amber chip (`[1]`) with a hover `CitationPreview` |
@@ -242,6 +243,23 @@ Last updated: 2026-10-02
 | Accent usage | `bg-primary` dot on a finished step; `Spinner` on the active step |
 
 **Pattern notes:** Sits above the assistant reply, not inside it. Finished steps use `Collapsible`. Do not put pipeline values into the answer text.
+
+### Suggested questions
+
+File: `client/features/chat/components/suggested-questions.tsx`
+Last updated: 2026-10-02
+
+| Property | Class |
+| --- | --- |
+| Background | `bg-card`, hover `hover:bg-primary/5` |
+| Border | `border`, hover `hover:border-primary/40` |
+| Border radius | `rounded-xl` |
+| Text | `text-sm` question, no heading |
+| Spacing | `p-3`, grid `gap-2`, `sm:grid-cols-3` |
+| Hover state | border shifts toward amber; `ArrowUpRight` at the bottom of the card nudges `-translate-y-0.5 translate-x-0.5` and turns `text-primary-ink` |
+| Shadow | none |
+
+**Pattern notes:** Shown only under the latest finished assistant reply. No section label. The card is the button.
 
 ---
 

@@ -95,6 +95,7 @@ The source library UI polls sources with pending/processing status every 3 secon
 - Before the prompt is built, near-duplicate chunks are dropped and the remaining text is capped. Conflicting sources are kept, with authority and indexed time, so the model can prefer the newer or more authoritative one
 - Each of those steps is logged on the server. The "How this answer was found" panel is shown only when `RAG_TRACE_ENABLED=true`. A finished step can be opened to see the rewrite, hypothetical passage, retrieved chunks, quality scores, and CRAG decision
 - The system prompt is built from those chunks, conversation summary (if any), user memories, and web-search availability
+- When retrieved sources do not cover the question, the reply names the gap and what the notebook focuses on, then offers web research if the toggle is on. A short yes runs that search. The latest reply also offers up to three short next questions
 - Optional **web search** toggle exposes a `web_search` tool (Tavily) the model can call for up-to-date information outside the workspace
 - Responses cite sources inline (`[1]`, `[2]`, …) and web results (`[W1]`, `[W2]`, …); citations render as hoverable source cards linking back to the source detail page or the external URL
 - Conversations can be renamed implicitly (auto-titled from the first message), deleted, or exported to a markdown file

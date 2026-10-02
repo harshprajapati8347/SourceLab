@@ -37,4 +37,16 @@ describe("retrieval queries", () => {
       routed.subqueries.join(" | "),
     );
   });
+
+  it("searches the workspace before treating a question as outside the notebook", () => {
+    const routed = routeQuery("What is Software Engineering?", {
+      queryClass: "out_of_domain",
+      dependsOnHistory: false,
+      rewrittenQuery: "Software Engineering",
+      subqueries: [],
+    });
+
+    assert.equal(routed.skipRetrieval, false);
+    assert.deepEqual(routed.queries, ["Software Engineering"]);
+  });
 });

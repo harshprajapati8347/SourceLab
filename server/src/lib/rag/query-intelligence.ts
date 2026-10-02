@@ -208,11 +208,20 @@ export function routeQuery(userText: string, classification: Classification) {
     ...partial,
   });
 
-  if (queryClass === "conversational" || queryClass === "out_of_domain") {
+  if (queryClass === "conversational") {
     return decision({
       transforms: [],
       queries: [],
       skipRetrieval: true,
+      useHyde: false,
+    });
+  }
+
+  if (queryClass === "out_of_domain") {
+    return decision({
+      transforms: rewritten ? ["contextual_rewrite"] : [],
+      queries: rewritten ? [rewritten] : [],
+      skipRetrieval: false,
       useHyde: false,
     });
   }

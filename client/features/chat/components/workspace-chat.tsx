@@ -69,6 +69,8 @@ import { ChatMessageBody } from "./chat-message-body";
 import { ChatEmptyState } from "./chat-empty-state";
 import { RagTracePanel } from "./rag-trace-panel";
 import { CitationSources } from "./citation-sources";
+import { SuggestedQuestions } from "./suggested-questions";
+import { parseSuggestions } from "../lib/suggestions";
 import { ChatComposer, type RestoredDraft } from "./chat-composer";
 import { SourceStatusBanner } from "./source-status-banner";
 import type { ChatCitation, ChatMessage } from "../lib/types";
@@ -95,7 +97,7 @@ type WorkspaceChatProps = {
 
 type SourceLabMessage = UIMessage<
   unknown,
-  { rag: RagTrace; citations: ChatCitation[] }
+  { rag: RagTrace; citations: ChatCitation[]; suggestions: string[] }
 >;
 
 /** User and assistant rows stored on one conversation. Matches server `CHAT_MESSAGE_LIMIT`. */
@@ -136,6 +138,15 @@ function readRagTrace(message: SourceLabMessage) {
   }
 
   return parseRagTrace(part.data);
+}
+
+function readSuggestions(message: SourceLabMessage) {
+  const part = message.parts.find((item) => item.type === "data-suggestions");
+  if (!part || part.type !== "data-suggestions") {
+    return [];
+  }
+
+  return parseSuggestions(part.data);
 }
 
 /** Citations streamed with the reply, before the saved message id exists. */
@@ -194,6 +205,15 @@ function toStoredParts(message: ChatMessage): SourceLabMessage["parts"] {
   const trace = parseRagTrace(message.trace);
   if (trace) {
     parts.push({ type: "data-rag", id: "rag-trace", data: trace });
+  }
+
+  const suggestions = parseSuggestions(message.suggestions);
+  if (suggestions.length > 0) {
+    parts.push({
+      type: "data-suggestions",
+      id: "suggestions",
+      data: suggestions,
+    });
   }
 
   return parts;
@@ -714,6 +734,10 @@ export function WorkspaceChat({
                     const isLastMessage = messageIndex === messages.length - 1;
                     const isAnimatingMessage =
                       !isUser && isStreaming && isLastMessage;
+                    const suggestions =
+                      !isUser && isLastMessage && !isStreaming
+                        ? readSuggestions(message)
+                        : [];
 
                     return (
                       <MessageScrollerItem
@@ -756,6 +780,13 @@ export function WorkspaceChat({
                                   citations={citations}
                                 />
                               </MessageFooter>
+                            ) : null}
+                            {suggestions.length > 0 ? (
+                              <SuggestedQuestions
+                                questions={suggestions}
+                                disabled={isStreaming || isAtMessageLimit}
+                                onSelect={sendUserMessage}
+                              />
                             ) : null}
                           </MessageContent>
                         </Message>
