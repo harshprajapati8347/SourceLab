@@ -1,6 +1,8 @@
 # UI Tokens
 
-Design tokens for SourceLab, pulled directly from `client/app/globals.css` and `client/components.json`. This project uses **Tailwind CSS v4** with shadcn/ui's `@theme inline` pattern — there is **no `tailwind.config.ts`**. Never hardcode hex/rgb values or use raw Tailwind palette classes (`bg-purple-500`, `text-gray-600`, etc.) — always use the semantic tokens below.
+Design tokens for SourceLab, from `client/app/globals.css` and `client/components.json`. This project uses **Tailwind CSS v4** with shadcn/ui's `@theme inline` pattern. There is **no `tailwind.config.ts`**. Never hardcode hex/rgb values or use raw Tailwind palette classes (`bg-purple-500`, `text-gray-600`, etc.). Use the semantic tokens below.
+
+The visual identity follows `docs/frontend-design/`: a dark-first, dense interface on a four-step neutral ramp with one amber accent, set in Manrope. The docs' hard-coded hex values and forced dark mode are not copied. Every colour is an oklch token and both themes work.
 
 ---
 
@@ -8,113 +10,119 @@ Design tokens for SourceLab, pulled directly from `client/app/globals.css` and `
 
 Tokens are declared twice in `globals.css`:
 
-1. Raw CSS custom properties in `:root` / `.dark` (actual oklch color values, radius base)
-2. `@theme inline` block that maps each raw variable to a Tailwind-facing name (`--color-primary: var(--primary)`), which is what makes `bg-primary`, `text-primary`, `border-primary`, etc. available as utility classes
+1. Raw CSS custom properties in `:root` / `.dark` (oklch colour values, radius base)
+2. An `@theme inline` block that maps each raw variable to a Tailwind-facing name (`--color-primary: var(--primary)`), which makes `bg-primary`, `text-primary`, `border-primary`, etc. available as utility classes
 
 ```tsx
-// Correct — semantic Tailwind utility generated from @theme
+// Correct: semantic Tailwind utility generated from @theme
 className="bg-card text-card-foreground border-border"
 
-// Correct — reference the CSS variable directly (rare; prefer the utility class)
-style={{ color: "var(--foreground)" }}
-
-// Never — hardcoded color values
+// Never: hardcoded colour values
 className="bg-[#101828] text-[#f6f7fb]"
 
-// Never — raw Tailwind palette classes
+// Never: raw Tailwind palette classes
 className="bg-purple-500 text-gray-600"
 ```
 
-Dark mode is class-based (`.dark` on `<html>`), toggled via `next-themes` (`ThemeProvider attribute="class"` in `client/app/layout.tsx`) and the `ModeToggle` component.
+Dark mode is class-based (`.dark` on `<html>`), toggled with `next-themes` (`ThemeProvider attribute="class" defaultTheme="dark" enableSystem` in `client/app/layout.tsx`). The theme switch lives in `UserMenu` (and the command palette). To force a subtree dark (the landing page and the sign-in brand panel), put the `dark` class on that element.
 
 ---
 
 ## Color Tokens
 
-All colors are defined as `oklch()` values. Base color family: **stone** (per `components.json`).
+Neutral ramp in dark: sidebar `oklch(0.145)` < background `0.18` < card/popover `0.215` < secondary/muted/accent `0.26` < border `0.30`. Light is a warm neutral set (`oklch(0.985 0.004 85)` background, white cards).
 
-| Token (light value) | Dark value | Tailwind utilities |
-| --- | --- | --- |
-| `--background: oklch(1 0 0)` | `oklch(0.147 0.004 49.25)` | `bg-background`, `text-background` |
-| `--foreground: oklch(0.147 0.004 49.25)` | `oklch(0.985 0.001 106.423)` | `bg-foreground`, `text-foreground` |
-| `--card` / `--card-foreground` | inverted in dark | `bg-card`, `text-card-foreground` |
-| `--popover` / `--popover-foreground` | inverted in dark | `bg-popover`, `text-popover-foreground` |
-| `--primary: oklch(0.841 0.238 128.85)` (lime/green) | `oklch(0.768 0.233 130.85)` | `bg-primary`, `text-primary`, `border-primary` |
-| `--primary-foreground: oklch(0.405 0.101 131.063)` | same | `text-primary-foreground` |
-| `--secondary` / `--secondary-foreground` | | `bg-secondary`, `text-secondary-foreground` |
-| `--muted` / `--muted-foreground` | | `bg-muted`, `text-muted-foreground` |
-| `--accent` / `--accent-foreground` | | `bg-accent`, `text-accent-foreground` |
-| `--destructive: oklch(0.577 0.245 27.325)` | `oklch(0.704 0.191 22.216)` | `bg-destructive`, `text-destructive` |
-| `--border` | `oklch(1 0 0 / 10%)` in dark | `border-border` |
-| `--input` | `oklch(1 0 0 / 15%)` in dark | `border-input`, used on form controls |
-| `--ring` | | `ring-ring` (focus rings) |
-| `--chart-1` … `--chart-5` | shared light/dark, green scale from `oklch(0.897 …)` down to `oklch(0.453 …)` | `bg-chart-1` … `bg-chart-5` (recharts / data viz) |
-| `--sidebar`, `--sidebar-foreground`, `--sidebar-primary`, `--sidebar-primary-foreground`, `--sidebar-accent`, `--sidebar-accent-foreground`, `--sidebar-border`, `--sidebar-ring` | | Sidebar-scoped variants used by `components/ui/sidebar.tsx` |
+| Token | Dark | Light | Tailwind utilities |
+| --- | --- | --- | --- |
+| `--background` | `oklch(0.18 0 0)` | `oklch(0.985 0.004 85)` | `bg-background` |
+| `--foreground` | `oklch(0.985 0 0)` | `oklch(0.18 0.006 70)` | `text-foreground` |
+| `--card` / `--popover` | `oklch(0.215 0 0)` | `oklch(1 0 0)` | `bg-card`, `bg-popover` |
+| `--primary` (amber) | `oklch(0.77 0.15 68)` | same | `bg-primary`, `border-primary`, `ring-primary`, icon tints |
+| `--primary-foreground` | `oklch(0.18 0 0)` | `oklch(0.18 0.01 70)` | `text-primary-foreground` (on an amber fill) |
+| `--primary-ink` | same as primary | `oklch(0.5 0.12 62)` | `text-primary-ink`: **amber as readable text** |
+| `--secondary`, `--muted`, `--accent` | `oklch(0.26 0 0)` | warm greys | `bg-secondary`, `bg-muted`, `bg-accent` |
+| `--muted-foreground` | `oklch(0.72 0 0)` | `oklch(0.49 0.01 70)` | `text-muted-foreground` |
+| `--destructive` | `oklch(0.7 0.19 22)` | `oklch(0.55 0.21 27)` | `bg-destructive`, `text-destructive` |
+| `--border` / `--input` | `oklch(0.30 0 0)` | `oklch(0.9 0.006 85)` | `border-border`, `border-input` |
+| `--ring` | amber | amber | `ring-ring` (focus rings) |
+| `--sidebar*` | darker than the page in dark | slightly darker than the page in light | Sidebar-scoped variants used by `components/ui/sidebar.tsx` |
+| `--chart-1` to `--chart-5` | amber scale | same | `bg-chart-1` and so on |
 
-The accent/primary hue is a lime-green (`oklch(... 128.85)` / `130.85`) — this is the only "brand" color in the palette. There is no separate hardcoded warning/success/info palette; status is communicated via `destructive`, `primary`, `secondary`, and `muted` plus icons, not extra custom colors. If a feature genuinely needs a new semantic color (e.g. a distinct "success" state), add it as a new `--color-*` token in `@theme inline` + `:root`/`.dark` rather than hardcoding.
+**Amber rule:** amber is a fill (`bg-primary` with `text-primary-foreground`), a border or ring tint (`border-primary/40`), or an icon tint. When amber is the colour of readable **text** on a surface that can be light, use `text-primary-ink`, not `text-primary` (contrast). Inside a `dark` subtree the two are identical.
+
+Status has no extra palette: use `destructive`, `primary`, `secondary`, and `muted` plus an icon. If a feature needs a new semantic colour, add a `--color-*` token in `@theme inline` and `:root`/`.dark` rather than hardcoding.
 
 ---
 
 ## Radius Tokens
 
-Base radius: `--radius: 0.875rem` (14px). All other radii are derived multiples:
+Base radius: `--radius: 0.625rem` (10px).
 
-| Token | Formula | Approx. value |
+| Token | Formula | Value |
 | --- | --- | --- |
-| `--radius-sm` | `var(--radius) * 0.6` | ~8.4px |
-| `--radius-md` | `var(--radius) * 0.8` | ~11.2px |
-| `--radius-lg` | `var(--radius)` | 14px |
-| `--radius-xl` | `var(--radius) * 1.4` | ~19.6px |
-| `--radius-2xl` | `var(--radius) * 1.8` | ~25.2px |
-| `--radius-3xl` | `var(--radius) * 2.2` | ~30.8px |
-| `--radius-4xl` | `var(--radius) * 2.6` | ~36.4px |
+| `--radius-sm` | `radius * 0.6` | 6px |
+| `--radius-md` | `radius * 0.8` | 8px |
+| `--radius-lg` | `radius` | 10px |
+| `--radius-xl` | `radius * 1.6` | 16px |
+| `--radius-2xl` | `radius * 1.8` | 18px |
+| `--radius-3xl` | `radius * 2.2` | 22px |
+| `--radius-4xl` | `radius * 2.6` | 26px |
 
-The codebase leans toward large, soft radii — feature components consistently use `rounded-2xl`/`rounded-3xl` for cards, dialogs, and empty states, and `rounded-full` for pill buttons, search inputs, and filter selects.
+Where each is used: `rounded-md` for small hit areas, `rounded-lg` for buttons, inputs, selects, menu items, and icon tiles, `rounded-xl` for cards, panels, and popovers, `rounded-2xl` for dialogs and the command palette, `rounded-full` for pills (filters, search fields on list pages, badges, prompt chips). Do not use `rounded-3xl` or larger.
 
 ---
 
 ## Typography
 
-Four font variables are registered in the root layout (`client/app/layout.tsx`) via `next/font/google` and exposed as CSS variables, then mapped in `@theme inline`:
+Two font variables are registered in `client/app/layout.tsx` via `next/font/google`:
 
-| Font | Google Font | CSS variable | Tailwind token | Usage |
-| --- | --- | --- | --- | --- |
-| Geist Sans | `Geist` | `--font-geist-sans` | *(not mapped to `--font-sans`; see note)* | Loaded but `--font-sans` is aliased to it in `@theme inline`; effectively unused since `html` forces `font-mono` |
-| JetBrains Mono | `JetBrains_Mono` | `--font-mono` | `font-mono` | **Default body font** — applied to `<html>` via `@layer base { html { @apply font-mono; } }` |
-| Figtree | `Figtree` | `--font-heading` | `font-heading` | Used explicitly on headings (`font-heading text-2xl font-semibold`, etc.) throughout feature components |
-| Geist Mono | `Geist_Mono` | `--font-geist-mono` | *(unused Tailwind token; variable loaded but not referenced in JSX classes today)* | |
+| Font | CSS variable | Tailwind token | Usage |
+| --- | --- | --- | --- |
+| Manrope | `--font-manrope` | `font-sans`, `font-heading` | Everything. `html` uses `font-sans`; `font-heading` is the same family and marks titles |
+| JetBrains Mono | `--font-jetbrains-mono` | `font-mono` | Data only: citation numbers, `Kbd`, code, Markdown source fields |
 
-**Practical rule:** body/UI text renders in the monospace font (JetBrains Mono, since `html` is forced to `font-mono`); apply `font-heading` explicitly to page titles, section titles, and card titles to get Figtree instead. Don't introduce a new heading font — follow this existing split.
-
-No fixed type scale table exists in the codebase (no `--font-size-*` tokens). Font sizing is done ad hoc via Tailwind size classes (`text-xs`, `text-sm`, `text-base`, `text-xl`, `text-2xl`, `text-3xl`, `text-4xl`) combined with `font-heading`/`font-semibold`/`font-medium` as needed — match the sizes already used on comparable elements (see `ui-registry.md`) rather than inventing new ones.
+Scale in practice: body `text-sm`, dense metadata `text-xs`, page titles `font-heading text-xl font-bold tracking-tight md:text-2xl`, card and section titles `font-heading text-sm|base font-semibold`, hero titles use fluid `clamp()`. Labels are sentence case. Do not add ALL-CAPS eyebrow labels.
 
 ---
 
 ## Spacing
 
-No custom spacing scale is defined — the project uses Tailwind v4's default spacing scale (`p-2`, `p-4`, `p-6`, `gap-2`, `gap-3`, `gap-4`, `gap-6`, etc.) directly. Observed conventions:
+Tailwind v4's default scale. Observed conventions:
 
 | Pattern | Usage |
 | --- | --- |
-| `p-6` / `p-6 md:p-8` | Page-level content padding (source library, learn hub) |
-| `gap-2` / `gap-3` | Inline control groups (badges, button rows, filter bars) |
-| `gap-4` / `gap-6` | Grid gaps between cards, vertical spacing between sections |
-| `px-4 py-2`, `h-14` | Sticky headers / toolbars |
-| `max-w-3xl`, `max-w-2xl`, `max-w-6xl` | Content width constraints (chat column, forms, dashboard) |
+| `p-4 md:p-8` | Page content padding inside a workspace |
+| `px-4 md:px-8`, `h-14` | Headers (`border-b`, `bg-background/80 backdrop-blur-md`) |
+| `gap-2` / `gap-3` | Inline control groups |
+| `gap-4` / `gap-6` | Grid gaps, section spacing |
+| `max-w-3xl` | Chat column, account pages |
+| `max-w-4xl` | Source and artifact detail |
+| `max-w-6xl` | Dashboard, sources, learn |
+| `w-80` | Sources panel |
+
+---
+
+## Motion
+
+- House easing: `ease-house` (`cubic-bezier(0.16, 1, 0.3, 1)`, defined in `@theme inline`) with 200ms for hover and focus, 200-300ms for panels and dialogs.
+- Motion answers a user action (open, expand, hover). The only unprompted motion is `animate-spin` (a request in flight) and `animate-pulse` (a background job).
+- `prefers-reduced-motion: reduce` removes animation and transition durations globally (spinners excepted). Learn viewers use `MotionConfig reducedMotion="user"`.
 
 ---
 
 ## Component-Level Notes
 
-- **Buttons** (`components/ui/button.tsx`) are built on `@base-ui/react`'s `Button` primitive (not Radix), with `class-variance-authority` variants: `default`, `outline`, `secondary`, `ghost`, `destructive`, `link`; sizes `xs`, `sm`, `default`, `lg`, `icon-xs`, `icon-sm`, `icon`, `icon-lg`. Base radius on buttons is `rounded-2xl`.
-- Buttons that render as a link use the `nativeButton={false}` + `render={<Link href="..." />}` pattern (base-ui's polymorphic render prop) — see `ui-rules.md`.
-- **Shadows** are used sparingly and only via Tailwind's `shadow-sm`/`shadow-md` utilities — no custom box-shadow values are defined as tokens.
-- **Icons**: `lucide-react` exclusively (per `components.json`, `iconLibrary: "lucide"`).
+- **Buttons** (`components/ui/button.tsx`) use `@base-ui/react`'s `Button` with CVA variants `default`, `outline`, `secondary`, `ghost`, `destructive`, `link` and sizes `xs`, `sm`, `default`, `lg`, `icon(-xs|-sm|-lg)`. Base radius `rounded-lg`.
+- Buttons that render as a link use `nativeButton={false}` + `render={<Link href="..." />}`.
+- **Active navigation** shows a 2px amber tick on the left (`SidebarMenuButton` `data-active`).
+- **Focus**: every control has a `focus-visible:ring-3 ring-ring/30-40` style. Composer uses `focus-within` border + 1px ring in `primary`.
+- **Shadows** are rare: dialogs `shadow-2xl`, popovers `shadow-lg`. Cards use borders, not shadows.
+- **Icons**: `lucide-react` only.
 
 ## Invariants
 
-- Never hardcode hex/oklch/rgb color values in `className` or inline `style` — always reference a `--color-*` token via its Tailwind utility.
-- Never use Tailwind's built-in color palette classes (`bg-purple-500`, `text-gray-600`, etc.) — this app has no such classes anywhere in `components/ui` or `features/*`; stay consistent.
-- Never add a `tailwind.config.ts` for colors/tokens — all tokens live in `app/globals.css` under `@theme inline` and `:root`/`.dark`.
-- Use `font-heading` for headings/titles and leave body text on the default `font-mono` — don't introduce a third font family.
-- Prefer large radii (`rounded-2xl`/`rounded-3xl`/`rounded-full`) consistent with existing cards, dialogs, and pill controls.
+- Never hardcode hex/oklch/rgb colours in `className` or inline `style`. Reference a token.
+- Never use Tailwind's built-in palette classes. Scrims use `bg-black/60` (overlays only).
+- Never add a `tailwind.config.ts`. All tokens live in `app/globals.css`.
+- Use `text-primary-ink` for amber text, `text-primary` only for icons or inside a forced-dark subtree.
+- Use `font-heading` for titles. Do not add a third font family.

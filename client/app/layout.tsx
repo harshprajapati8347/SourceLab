@@ -1,33 +1,34 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono, JetBrains_Mono, Figtree } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { JetBrains_Mono, Manrope } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import QueryProvider from "@/shared/components/providers/query-provider";
 import { ThemeProvider } from "@/shared/components/providers/theme-provider";
+import { Toaster } from "@/components/ui/toast";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
-const figtreeHeading = Figtree({
+const manrope = Manrope({
   subsets: ["latin"],
-  variable: "--font-heading",
+  variable: "--font-manrope",
 });
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
-  variable: "--font-mono",
-});
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  variable: "--font-jetbrains-mono",
 });
 
 export const metadata: Metadata = {
-  title: "SourceLab",
+  title: {
+    default: "SourceLab",
+    template: "%s · SourceLab",
+  },
   description: "Chat with your documents",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  colorScheme: "dark light",
 };
 
 export default function RootLayout({
@@ -39,24 +40,24 @@ export default function RootLayout({
     <html
       lang="en"
       className={cn(
-        "h-full",
-        "antialiased",
-        geistSans.variable,
-        geistMono.variable,
-        "font-mono",
+        "h-full antialiased",
+        manrope.variable,
         jetbrainsMono.variable,
-        figtreeHeading.variable,
       )}
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col">
+      <body className="flex min-h-full flex-col">
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
+          defaultTheme="dark"
           enableSystem
           disableTransitionOnChange
         >
-          <QueryProvider>{children}</QueryProvider>
+          <QueryProvider>
+            <TooltipProvider delay={300}>
+              <Toaster>{children}</Toaster>
+            </TooltipProvider>
+          </QueryProvider>
         </ThemeProvider>
       </body>
     </html>

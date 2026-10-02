@@ -30,11 +30,18 @@ export function RagTracePanel({ trace }: RagTracePanelProps) {
   }
 
   return (
-    <div className="mb-2 w-full rounded-2xl px-3 py-2">
-      <Accordion>
+    <div className="mb-1 w-full">
+      <Accordion className="bg-muted/30">
         <AccordionItem value="pipeline">
-          <AccordionTrigger>Pipeline</AccordionTrigger>
-          <AccordionContent>
+          <AccordionTrigger className="items-center p-3 text-xs hover:no-underline">
+            <span>
+              How this answer was found
+              <span className="ml-2 font-normal text-muted-foreground">
+                {trace.steps.length} steps
+              </span>
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="pb-3">
             <ol className="mt-1">
               {trace.steps.map((step) => {
                 const expandable = step.lines.length > 0;
@@ -68,7 +75,7 @@ export function RagTracePanel({ trace }: RagTracePanelProps) {
                 return (
                   <li key={step.id}>
                     <Collapsible>
-                      <CollapsibleTrigger className="flex w-full items-start gap-2 rounded-lg px-1 py-1 text-left hover:bg-muted/40">
+                      <CollapsibleTrigger className="flex w-full items-start gap-2 rounded-lg px-1 py-1 text-left outline-none transition-colors duration-200 hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/40">
                         {row}
                       </CollapsibleTrigger>
                       <CollapsibleContent>

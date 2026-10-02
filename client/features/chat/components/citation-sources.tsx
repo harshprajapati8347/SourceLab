@@ -87,11 +87,11 @@ export function CitationSources({
               <HoverCardTrigger
                 delay={150}
                 closeDelay={100}
-                className="rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+                className="rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
               >
                 <Attachment
                   size="xs"
-                  className="cursor-default transition-shadow hover:shadow-sm"
+                  className="cursor-default transition-colors duration-200 hover:border-primary/40"
                 >
                   <AttachmentMedia variant="icon">
                     <SourceTypeIcon

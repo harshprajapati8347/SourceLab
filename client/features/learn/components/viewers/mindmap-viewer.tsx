@@ -259,7 +259,7 @@ function MindMapFlowNode({ id, data, selected }: NodeProps) {
   return (
     <div
       style={{ width: isRoot ? ROOT_WIDTH : NODE_WIDTH }}
-      className={`rounded-2xl border px-3 py-2 shadow-sm transition-colors ${
+      className={`rounded-xl border px-3 py-2 shadow-sm transition-colors ${
         selected
           ? "border-primary bg-primary/15 ring-2 ring-primary/40"
           : isRoot
@@ -554,7 +554,7 @@ function MindMapCanvas({ nodes, edges, workspaceId }: MindMapCanvasProps) {
         {selectedNode ? (
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 bg-card/40 px-4 py-3">
             <div className="min-w-0">
-              <p className="text-xs tracking-wide text-muted-foreground uppercase">
+              <p className="text-xs font-medium text-muted-foreground">
                 Selected topic
               </p>
               <p className="truncate font-medium">{selectedNode.label}</p>
@@ -608,7 +608,7 @@ export function MindMapViewer({
 
   const containerClass = fullscreen
     ? "fixed inset-0 z-50 flex flex-col bg-background"
-    : `flex min-h-[min(74vh,780px)] flex-col overflow-hidden rounded-3xl border bg-muted/20 ${className ?? ""}`;
+    : `flex min-h-[min(74vh,780px)] flex-col overflow-hidden rounded-xl border bg-card ${className ?? ""}`;
 
   return (
     <div className={containerClass}>

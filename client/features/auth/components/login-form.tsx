@@ -89,9 +89,9 @@ export function LoginForm({
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
         <CardHeader className="text-center">
-          <CardTitle className="text-xl">Welcome back</CardTitle>
+          <CardTitle className="text-xl font-bold">Welcome back</CardTitle>
           <CardDescription>
-            Sign in with Google or email to continue to SourceLab AI
+            Sign in with Google or email to continue to SourceLab
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -145,7 +145,9 @@ export function LoginForm({
                   />
                 </div>
                 {error ? (
-                  <p className="text-center text-sm text-destructive">{error}</p>
+                  <p role="alert" className="text-center text-sm text-destructive">
+                    {error}
+                  </p>
                 ) : null}
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isEmailLoading ? <Spinner /> : null}

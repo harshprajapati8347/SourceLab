@@ -1,6 +1,6 @@
 # UI Rules
 
-Concise, observed conventions for building SourceLab UI. These are inferred from consistent patterns across `client/features/*` and `client/components/ui` — match them rather than inventing new patterns.
+Concise conventions for building SourceLab UI, following `docs/frontend-design/` where it fits this stack. They come from consistent patterns across `client/features/*` and `client/components/ui` — match them rather than inventing new patterns.
 
 ---
 
@@ -28,56 +28,49 @@ This project's shadcn/ui setup (`components.json`, style `base-rhea`) is built o
 
 ## Font
 
-- Body/UI text uses the default (`font-mono` on `<html>`, i.e. JetBrains Mono) — don't add a font class for normal body copy.
-- Apply `font-heading` explicitly on page titles, section headings, and card titles:
+- Body and UI text use Manrope (`font-sans` on `<html>`). Do not add a font class for normal copy.
+- Apply `font-heading` (same family) on page titles, section headings, and card titles:
 
 ```tsx
-<h1 className="font-heading text-2xl font-semibold tracking-tight">Your notebooks</h1>
-<h2 className="font-heading text-xl font-semibold">Learning tools</h2>
+<h1 className="font-heading text-xl font-bold tracking-tight md:text-2xl">Sources</h1>
 ```
 
+- `font-mono` (JetBrains Mono) is for data only: citation numbers, `Kbd`, code, and Markdown fields.
+- Labels are sentence case. No ALL-CAPS eyebrow labels, and no numbered markers unless the content is a sequence.
 - Don't introduce new fonts. Fonts are registered once in `client/app/layout.tsx` via `next/font/google`.
 
 ---
 
 ## Layout
 
-- Content max-widths are chosen per context, not globally fixed: `max-w-3xl` for chat/message columns, `max-w-2xl` for single-column forms/settings, `max-w-6xl` for the dashboard.
-- Page-level padding is `p-6` on mobile, bumped to `p-6 md:p-8` or `px-4 md:px-8` for wider pages.
-- Sticky headers/toolbars use `h-14` and `border-b`, often with `bg-background/80 backdrop-blur-md` when they float over scrollable content (dashboard header).
-- Inside a workspace, layout is **sidebar + inset**, built from `components/ui/sidebar.tsx` (`SidebarProvider` → `Sidebar` + `SidebarInset`) — don't build a second custom sidebar; extend the existing `WorkspaceShell`.
-- The dashboard and settings pages use a simple centered/top-header layout with **no sidebar**.
+- Page titles in a workspace use `PageHeader` (`shared/components/page-header.tsx`): one `h1` per page, actions on the right.
+- Content widths: `max-w-3xl` for the chat column and account pages, `max-w-4xl` for detail pages, `max-w-6xl` for the dashboard, sources, and learn. Padding is `p-4 md:p-8`.
+- Headers are `h-14 border-b bg-background/80 backdrop-blur-md`.
+- Inside a workspace the layout is **sidebar + inset**, built from `components/ui/sidebar.tsx` and mounted once in `app/(protected)/workspace/[id]/layout.tsx` through `WorkspaceShell`. Route pages render only their content. Don't wrap a page in `WorkspaceShell` yourself.
+- The sources panel (`w-80`) sits beside chat and learn on desktop and is a `Sheet` below `md`. Its open state lives in `shared/stores/ui-store.ts`.
+- Pages outside a notebook use `AppHeader` (dashboard) or `AccountShell` (billing, memory).
+- The active notebook comes from the route (`usePathname`, route params), never from a store.
+- Keyboard shortcuts, the command palette, and the shortcuts dialog are mounted per shell through `AppOverlays`. Add new shortcuts in `use-keyboard-shortcuts.ts` and list them in `ShortcutsDialog`.
 
 ---
 
 ## Cards
 
-Use the shadcn `Card` primitives (`Card`, `CardHeader`, `CardTitle`, `CardDescription`, `CardContent`) for structured content (e.g. `SourceCard`, `LoginForm`). For lighter-weight custom "card-like" containers (list items, empty states, artifact tiles), the observed pattern is a plain `div` with:
+Use the shadcn `Card` primitives for structured content. For list items, artifact tiles, and notebook cards the pattern is a plain element with:
 
 ```
-rounded-2xl (or rounded-3xl for larger surfaces) border bg-card p-4 (or p-6)
+rounded-xl border bg-card p-4  hover:border-primary/40  transition-colors duration-200 ease-house
 ```
 
-Hover-interactive cards add `transition-shadow hover:shadow-md` or `hover:bg-muted/20`. Destructive/danger sections use `border-destructive/30` (or `/40`) with a matching `bg-destructive/5` background — never a solid destructive card background.
+Make the whole card clickable with a stretched link on the title (`after:absolute after:inset-0`) and lift secondary actions above it with `relative z-10`. Hover shifts the border toward amber and a small arrow nudges diagonally. No lift and no large shadow. Danger sections use `border-destructive/30 bg-destructive/5`, never a solid destructive fill.
 
 ---
 
 ## Empty States
 
-Use the shared `Empty` / `EmptyHeader` / `EmptyTitle` / `EmptyDescription` / `EmptyContent` primitives (`components/ui/empty.tsx`) for genuinely empty-but-styled states (no results, API error). For lighter inline "nothing here yet" placeholders inside a feature (e.g. Learn hub, Memory settings before any data exists), the repeated pattern is:
+Use `Empty` / `EmptyHeader` / `EmptyTitle` / `EmptyDescription` / `EmptyContent` (`components/ui/empty.tsx`) with `className="border"` for errors and `border border-dashed` for first-use states. Every empty state the user can resolve has a primary action, and every error state offers "Try again" (`refetch()`).
 
-```tsx
-<div className="rounded-2xl border border-dashed p-10 text-center">
-  <p className="font-medium">No {thing} yet</p>
-  <p className="mt-2 text-sm text-muted-foreground">Helpful next-step copy.</p>
-  <Button className="mt-4" onClick={...}>
-    <PlusIcon />
-    Primary action
-  </Button>
-</div>
-```
-
-Loading states use `Skeleton` components sized to roughly match the eventual content (e.g. `h-32 rounded-3xl` for a card grid, `h-16 w-2/3 rounded-3xl` for a chat bubble).
+Loading uses `Skeleton` blocks sized like the content (`min-h-44 rounded-xl` for notebook cards) inside a container with `aria-busy="true"`. A background refetch that fails must not replace data already on screen: branch on `error && !data`.
 
 ---
 
@@ -94,7 +87,7 @@ Loading states use `Skeleton` components sized to roughly match the eventual con
 </Button>
 ```
 
-- Pill-shaped filter/toggle controls (search bar, view toggle, filter dropdowns) explicitly add `rounded-full` on top of the button's default `rounded-2xl`.
+- Pill-shaped filter/toggle controls (list-page search, view toggle, filter dropdowns) explicitly add `rounded-full` on top of the button's default `rounded-lg`.
 
 ---
 
@@ -120,7 +113,8 @@ Loading states use `Skeleton` components sized to roughly match the eventual con
 ## Errors
 
 - Never show a raw thrown error to the user. `shared/lib/api.ts` throws a typed `ApiError` with a `message` derived from the server's `{ error }` JSON body; UI code branches on `error instanceof ApiError ? error.message : "generic fallback"`.
-- Inline form/dialog errors render as `<p className="text-sm text-destructive">{message}</p>` beneath the form, not as toasts (no toast/sonner library is wired up despite a `toast.tsx` primitive existing in `components/ui` — check before assuming it's active).
+- Inline form/dialog errors render as `<p role="alert" className="text-sm text-destructive">{message}</p>` beneath the form.
+- Outcomes of an action that leaves the dialog or page (created, deleted, saved, reprocessing started, failed to delete) use the toast: `import { toast } from "@/components/ui/toast"; toast.add({ title, description, type: "success" | "error" })`. `Toaster` is mounted in `app/layout.tsx`. Mutations that can be triggered from several places (source delete, bulk delete, reprocess) toast from their hook so a bulk action produces one toast. Use `getErrorMessage(error, fallback)` from `shared/lib/api` for the description.
 
 ---
 
@@ -136,6 +130,8 @@ Tokens are defined with `@theme inline` + `:root`/`.dark` in `app/globals.css`. 
 - Don't use `asChild` — use the base-ui `render` prop (and `nativeButton={false}` on `Button` when polymorphic).
 - Don't use Tailwind's built-in color classes (`bg-purple-500`, `text-gray-600`, etc.) — use the semantic tokens in `ui-tokens.md`.
 - Don't add a new form library (React Hook Form, Formik) — the existing pattern is controlled `useState` fields.
-- Don't add a toast/notification library without checking what's already installed and used.
+- Don't add a toast library: use the Base UI toast in `components/ui/toast.tsx`.
+- Don't add a `useEffect` that only copies props into state. Mount form bodies fresh when a dialog opens (inner form component) or use a `key`.
+- Don't use `rounded-3xl` or larger, ALL-CAPS labels, or `text-primary` for text on surfaces that can be light (use `text-primary-ink`).
 - Don't call `fetch`/`apiFetch` directly from a component — go through a feature hook.
 - Don't build a second sidebar implementation — extend `WorkspaceShell` and `components/ui/sidebar.tsx`.

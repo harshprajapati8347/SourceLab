@@ -54,9 +54,9 @@ export function TakeawaysViewer({ items }: { items: string[] }) {
               delay: Math.min(index * 0.04, 0.4),
               duration: 0.25,
             }}
-            className="group flex items-start gap-3 rounded-2xl border bg-card px-4 py-3 transition-colors hover:border-primary/40"
+            className="group flex items-start gap-3 rounded-xl border bg-card px-4 py-3 transition-colors hover:border-primary/40"
           >
-            <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/12 text-xs font-medium text-primary tabular-nums">
+            <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/12 text-xs font-medium text-primary-ink tabular-nums">
               {index + 1}
             </span>
 

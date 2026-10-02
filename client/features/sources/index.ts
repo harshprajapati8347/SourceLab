@@ -42,6 +42,6 @@ export { MarkdownPreview } from "./components/markdown-preview";
 export { SourceCard } from "./components/source-card";
 export { SourceDetail } from "./components/source-detail";
 export { SourceLibrary } from "./components/source-library";
-export { SourceSidebarList } from "./components/source-sidebar-list";
+export { SourcesPanel } from "./components/sources-panel";
 export { SourceStatusBadge } from "./components/source-status-badge";
 export { SourceTypeIcon } from "./components/source-type-icon";

@@ -1,19 +1,32 @@
 "use client";
 
-import Link from "next/link";
-import { formatDistanceToNow } from "date-fns";
-import {
-  ArrowLeftIcon,
-  BrainIcon,
-  PencilIcon,
-  PlusIcon,
-  Trash2Icon,
-} from "lucide-react";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { formatDistanceToNow } from "date-fns";
+import { PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
-import { workspaceRoutes } from "@/features/workspaces/lib/routes";
+import { Spinner } from "@/components/ui/spinner";
+import { toast } from "@/components/ui/toast";
+import { AccountShell } from "@/features/workspaces/components/account-shell";
+import { getErrorMessage } from "@/shared/lib/api";
 import {
   useCreateMemory,
   useDeleteMemory,
@@ -24,13 +37,19 @@ import type { UserMemory } from "../lib/types";
 import { MemoryFormDialog } from "./memory-form-dialog";
 
 export function MemorySettings() {
-  const { data: memories = [], isLoading, error } = useMemories();
+  const {
+    data: memories = [],
+    isLoading,
+    error,
+    refetch,
+  } = useMemories();
   const createMemory = useCreateMemory();
   const updateMemory = useUpdateMemory();
   const deleteMemory = useDeleteMemory();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingMemory, setEditingMemory] = useState<UserMemory | null>(null);
+  const [deletingMemory, setDeletingMemory] = useState<UserMemory | null>(null);
 
   function openCreateDialog() {
     setEditingMemory(null);
@@ -48,71 +67,88 @@ export function MemorySettings() {
         memoryId: editingMemory.id,
         input: values,
       });
+      toast.add({ title: "Memory updated", type: "success" });
       return;
     }
 
     await createMemory.mutateAsync(values);
+    toast.add({ title: "Memory added", type: "success" });
+  }
+
+  async function confirmDelete() {
+    if (!deletingMemory) {
+      return;
+    }
+
+    try {
+      await deleteMemory.mutateAsync(deletingMemory.id);
+      toast.add({ title: "Memory deleted", type: "success" });
+      setDeletingMemory(null);
+    } catch (deleteError) {
+      toast.add({
+        title: "Could not delete this memory",
+        description: getErrorMessage(deleteError, "Try again in a moment."),
+        type: "error",
+      });
+    }
   }
 
   return (
-    <div className="mx-auto flex min-h-svh w-full max-w-3xl flex-col gap-8 p-6 md:p-10">
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-3">
-          <Button
-            nativeButton={false}
-            variant="ghost"
-            size="sm"
-            className="-ml-2"
-            render={<Link href={workspaceRoutes.list} />}
-          >
-            <ArrowLeftIcon />
-            Dashboard
-          </Button>
-          <div className="flex items-center gap-2">
-            <BrainIcon className="size-5" />
-            <h1 className="font-heading text-2xl font-semibold">Memory</h1>
-          </div>
-          <p className="max-w-xl text-sm text-muted-foreground">
-            Powered by Mem0. SourceLab learns stable facts from your chats and
-            uses semantic search to recall them in future conversations.
-          </p>
-        </div>
+    <AccountShell
+      title="Memory"
+      description="Things SourceLab remembers about you across every notebook. It learns some from your chats, and you can add or remove any of them."
+      actions={
         <Button onClick={openCreateDialog}>
           <PlusIcon />
           Add memory
         </Button>
-      </div>
-
+      }
+    >
       {isLoading ? (
-        <div className="space-y-3">
-          <Skeleton className="h-24 rounded-3xl" />
-          <Skeleton className="h-24 rounded-3xl" />
+        <div className="space-y-3" aria-busy="true" aria-label="Loading memories">
+          <Skeleton className="h-24 rounded-xl" />
+          <Skeleton className="h-24 rounded-xl" />
         </div>
-      ) : error ? (
-        <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-          Could not load memories from Mem0.
-        </div>
+      ) : error && memories.length === 0 ? (
+        <Empty className="border">
+          <EmptyHeader>
+            <EmptyTitle>Could not load your memories</EmptyTitle>
+            <EmptyDescription>
+              {getErrorMessage(error, "Check your connection and try again.")}
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button onClick={() => void refetch()}>Try again</Button>
+          </EmptyContent>
+        </Empty>
       ) : memories.length === 0 ? (
-        <div className="rounded-2xl border border-dashed p-10 text-center">
-          <p className="font-medium">No memories yet</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Chat for a while and Mem0 will extract preferences and context, or
-            add a memory manually.
-          </p>
-          <Button className="mt-4" onClick={openCreateDialog}>
-            <PlusIcon />
-            Add memory
-          </Button>
-        </div>
+        <Empty className="border border-dashed py-14">
+          <EmptyHeader>
+            <EmptyTitle>No memories yet</EmptyTitle>
+            <EmptyDescription>
+              Keep chatting and SourceLab will pick up your preferences, or add
+              one yourself.
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button onClick={openCreateDialog}>
+              <PlusIcon />
+              Add a memory
+            </Button>
+          </EmptyContent>
+        </Empty>
       ) : (
-        <div className="space-y-3">
+        <ul className="space-y-3">
           {memories.map((memory) => (
-            <div key={memory.id} className="rounded-3xl border bg-card p-4">
+            <li
+              key={memory.id}
+              className="rounded-xl border bg-card p-4 transition-colors duration-200 hover:border-primary/30"
+            >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1 space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="secondary">
-                      {memory.source === "manual" ? "Manual" : "Learned"}
+                      {memory.source === "manual" ? "Added by you" : "Learned"}
                     </Badge>
                     {memory.categories?.map((category) => (
                       <Badge key={category} variant="outline">
@@ -120,7 +156,7 @@ export function MemorySettings() {
                       </Badge>
                     ))}
                   </div>
-                  <p className="text-sm">{memory.memory}</p>
+                  <p className="text-sm leading-relaxed">{memory.memory}</p>
                   <p className="text-xs text-muted-foreground">
                     Updated{" "}
                     {formatDistanceToNow(new Date(memory.updatedAt), {
@@ -132,6 +168,7 @@ export function MemorySettings() {
                   <Button
                     variant="ghost"
                     size="icon-sm"
+                    aria-label="Edit memory"
                     onClick={() => openEditDialog(memory)}
                   >
                     <PencilIcon />
@@ -139,16 +176,16 @@ export function MemorySettings() {
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    onClick={() => void deleteMemory.mutateAsync(memory.id)}
-                    disabled={deleteMemory.isPending}
+                    aria-label="Delete memory"
+                    onClick={() => setDeletingMemory(memory)}
                   >
                     <Trash2Icon />
                   </Button>
                 </div>
               </div>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
 
       <MemoryFormDialog
@@ -158,6 +195,41 @@ export function MemorySettings() {
         onSubmit={handleSubmit}
         isPending={createMemory.isPending || updateMemory.isPending}
       />
-    </div>
+
+      <AlertDialog
+        open={Boolean(deletingMemory)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeletingMemory(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this memory?</AlertDialogTitle>
+            <AlertDialogDescription>
+              SourceLab will stop using it in chats. If you mention it again, it
+              may learn it again.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMemory.isPending}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deleteMemory.isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmDelete();
+              }}
+            >
+              {deleteMemory.isPending ? <Spinner /> : null}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </AccountShell>
   );
 }

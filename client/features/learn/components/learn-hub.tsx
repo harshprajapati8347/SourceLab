@@ -1,19 +1,39 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
-import { GraduationCapIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { PlusIcon, Trash2Icon } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
+import { toast } from "@/components/ui/toast";
+import { PageHeader } from "@/shared/components/page-header";
+import { getErrorMessage } from "@/shared/lib/api";
 import { ARTIFACT_TYPE_LABELS } from "../lib/constants";
 import { learnRoutes } from "../lib/routes";
+import type { LearningArtifact } from "../lib/types";
 import { useArtifacts, useDeleteArtifact } from "../hooks/use-artifacts";
-import {
-  ArtifactStatusBadge,
-  ArtifactTypeBadge,
-} from "./artifact-status-badge";
+import { ArtifactStatusBadge } from "./artifact-status-badge";
+import { ArtifactTypeIcon } from "./artifact-type-icon";
 import { GenerateArtifactDialog } from "./generate-artifact-dialog";
-import { useState } from "react";
 
 type LearnHubProps = {
   workspaceId: string;
@@ -21,89 +41,126 @@ type LearnHubProps = {
 
 export function LearnHub({ workspaceId }: LearnHubProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
-  const { data: artifacts = [], isLoading, error } = useArtifacts(workspaceId);
+  const [deleting, setDeleting] = useState<LearningArtifact | null>(null);
+  const {
+    data: artifacts = [],
+    isLoading,
+    error,
+    refetch,
+  } = useArtifacts(workspaceId);
   const deleteArtifact = useDeleteArtifact(workspaceId);
 
-  return (
-    <div className="flex flex-1 flex-col gap-6 p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <GraduationCapIcon className="size-5" />
-            <h2 className="font-heading text-xl font-semibold">
-              Learning tools
-            </h2>
-          </div>
-          <p className="max-w-xl text-sm text-muted-foreground">
-            Generate summaries, flashcards, quizzes, mind maps, and reports from
-            your indexed sources.
-          </p>
-        </div>
-        <Button onClick={() => setDialogOpen(true)}>
-          <PlusIcon />
-          Generate
-        </Button>
-      </div>
+  async function confirmDelete() {
+    if (!deleting) {
+      return;
+    }
 
-      {isLoading ? (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          <Skeleton className="h-32 rounded-3xl" />
-          <Skeleton className="h-32 rounded-3xl" />
-          <Skeleton className="h-32 rounded-3xl" />
-        </div>
-      ) : error ? (
-        <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-          Could not load learning tools.
-        </div>
-      ) : artifacts.length === 0 ? (
-        <div className="rounded-2xl border border-dashed p-10 text-center">
-          <p className="font-medium">No learning tools yet</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Generate your first summary, quiz, or flashcard deck from workspace
-            sources.
-          </p>
-          <Button className="mt-4" onClick={() => setDialogOpen(true)}>
+    try {
+      await deleteArtifact.mutateAsync(deleting.id);
+      toast.add({ title: "Study tool deleted", type: "success" });
+      setDeleting(null);
+    } catch (deleteError) {
+      toast.add({
+        title: "Could not delete it",
+        description: getErrorMessage(deleteError, "Try again in a moment."),
+        type: "error",
+      });
+    }
+  }
+
+  return (
+    <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 p-4 md:p-8">
+      <PageHeader
+        title="Learn"
+        description="Turn your sources into summaries, flashcards, quizzes, mind maps, and reports."
+        actions={
+          <Button onClick={() => setDialogOpen(true)}>
             <PlusIcon />
             Generate
           </Button>
-        </div>
-      ) : (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {artifacts.map((artifact) => (
-            <div
-              key={artifact.id}
-              className="group relative rounded-3xl border bg-card p-4 transition-colors hover:bg-muted/20"
-            >
-              <Link
-                href={learnRoutes.detail(workspaceId, artifact.id)}
-                className="block space-y-3"
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <ArtifactTypeBadge type={artifact.type} />
-                  <ArtifactStatusBadge status={artifact.status} />
-                </div>
-                <div>
-                  <p className="font-medium">{artifact.title}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {ARTIFACT_TYPE_LABELS[artifact.type]} ·{" "}
-                    {formatDistanceToNow(new Date(artifact.createdAt), {
-                      addSuffix: true,
-                    })}
-                  </p>
-                </div>
-              </Link>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="absolute top-3 right-3 opacity-0 transition-opacity group-hover:opacity-100"
-                onClick={() => void deleteArtifact.mutateAsync(artifact.id)}
-                disabled={deleteArtifact.isPending}
-              >
-                <Trash2Icon />
-              </Button>
-            </div>
+        }
+      />
+
+      {isLoading ? (
+        <div
+          className="grid gap-3 md:grid-cols-2 xl:grid-cols-3"
+          aria-busy="true"
+          aria-label="Loading study tools"
+        >
+          {Array.from({ length: 3 }).map((_, index) => (
+            <Skeleton key={index} className="h-32 rounded-xl" />
           ))}
         </div>
+      ) : error && artifacts.length === 0 ? (
+        <Empty className="border">
+          <EmptyHeader>
+            <EmptyTitle>Could not load study tools</EmptyTitle>
+            <EmptyDescription>
+              {getErrorMessage(error, "Check your connection and try again.")}
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button onClick={() => void refetch()}>Try again</Button>
+          </EmptyContent>
+        </Empty>
+      ) : artifacts.length === 0 ? (
+        <Empty className="border border-dashed py-16">
+          <EmptyHeader>
+            <EmptyTitle>Nothing generated yet</EmptyTitle>
+            <EmptyDescription>
+              Pick a format and SourceLab builds it from the sources in this
+              notebook.
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button onClick={() => setDialogOpen(true)}>
+              <PlusIcon />
+              Generate your first study tool
+            </Button>
+          </EmptyContent>
+        </Empty>
+      ) : (
+        <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {artifacts.map((artifact) => (
+            <li key={artifact.id} className="flex">
+              <article className="group relative flex w-full flex-col gap-3 rounded-xl border bg-card p-4 transition-colors duration-200 ease-house focus-within:border-primary/40 hover:border-primary/40">
+                <div className="flex items-start gap-3">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border bg-muted text-muted-foreground transition-colors group-hover:border-primary/30 group-hover:bg-primary/10 group-hover:text-primary-ink">
+                    <ArtifactTypeIcon type={artifact.type} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate text-sm font-semibold">
+                      <Link
+                        href={learnRoutes.detail(workspaceId, artifact.id)}
+                        className="outline-none after:absolute after:inset-0 after:rounded-xl focus-visible:after:ring-3 focus-visible:after:ring-ring/40"
+                      >
+                        {artifact.title}
+                      </Link>
+                    </h3>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {ARTIFACT_TYPE_LABELS[artifact.type]} ·{" "}
+                      {formatDistanceToNow(new Date(artifact.createdAt), {
+                        addSuffix: true,
+                      })}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="relative z-10 text-muted-foreground transition-opacity md:opacity-0 md:focus-visible:opacity-100 md:group-hover:opacity-100"
+                    onClick={() => setDeleting(artifact)}
+                    aria-label={`Delete ${artifact.title}`}
+                  >
+                    <Trash2Icon />
+                  </Button>
+                </div>
+                <div className="border-t pt-3">
+                  <ArtifactStatusBadge status={artifact.status} />
+                </div>
+              </article>
+            </li>
+          ))}
+        </ul>
       )}
 
       <GenerateArtifactDialog
@@ -111,6 +168,44 @@ export function LearnHub({ workspaceId }: LearnHubProps) {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
       />
+
+      <AlertDialog
+        open={Boolean(deleting)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleting(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this study tool?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <span className="font-medium text-foreground">
+                {deleting?.title}
+              </span>{" "}
+              will be deleted for good. You can generate a new one from your
+              sources, which uses credits.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteArtifact.isPending}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deleteArtifact.isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmDelete();
+              }}
+            >
+              {deleteArtifact.isPending ? <Spinner /> : null}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

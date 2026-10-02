@@ -66,7 +66,7 @@ export function ResetPasswordForm({
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
         <CardHeader className="text-center">
-          <CardTitle className="text-xl">Choose a new password</CardTitle>
+          <CardTitle className="text-xl font-bold">Choose a new password</CardTitle>
           <CardDescription>
             Enter a new password for your SourceLab account.
           </CardDescription>
@@ -101,7 +101,9 @@ export function ResetPasswordForm({
                 />
               </div>
               {error ? (
-                <p className="text-center text-sm text-destructive">{error}</p>
+                <p role="alert" className="text-center text-sm text-destructive">
+                    {error}
+                  </p>
               ) : null}
               <Button
                 type="submit"

@@ -9,7 +9,11 @@ import {
     listWorkspaces,
     updateWorkspace,
 } from "../lib/api";
-import type { CreateWorkspaceInput, UpdateWorkspaceInput } from "../lib/types";
+import type {
+    CreateWorkspaceInput,
+    UpdateWorkspaceInput,
+    Workspace,
+} from "../lib/types";
 
 export const workspaceKeys = {
     all: ["workspaces"] as const,
@@ -23,10 +27,11 @@ export function useWorkspaces() {
     });
 }
 
-export function useWorkspace(id: string) {
+export function useWorkspace(id: string, initialData?: Workspace) {
     return useQuery({
         queryKey: workspaceKeys.detail(id),
         queryFn: () => getWorkspace(id),
+        initialData,
         retry: (_, error) =>
             !(error instanceof ApiError && error.status === 404),
     });

@@ -16,6 +16,8 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { toast } from "@/components/ui/toast";
+import { cn } from "@/lib/utils";
 import {
   useCreateSource,
   useImportWebsiteSource,
@@ -23,6 +25,8 @@ import {
   useUploadPdfSource,
 } from "../hooks/use-sources";
 import { sourceRoutes } from "../lib/routes";
+import type { Source, SourceType } from "../lib/types";
+import { SourceTypeIcon } from "./source-type-icon";
 
 type AddSourceDialogProps = {
   workspaceId: string;
@@ -30,11 +34,26 @@ type AddSourceDialogProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-export function AddSourceDialog({
+const TABS: { value: string; label: string; type: SourceType }[] = [
+  { value: "text", label: "Text", type: "TEXT" },
+  { value: "markdown", label: "Markdown", type: "MARKDOWN" },
+  { value: "pdf", label: "PDF", type: "PDF" },
+  { value: "website", label: "Website", type: "WEBSITE" },
+  { value: "youtube", label: "YouTube", type: "YOUTUBE" },
+];
+
+function errorText(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+/** Mounted fresh each time the dialog opens, so every field starts empty. */
+function AddSourceForm({
   workspaceId,
-  open,
-  onOpenChange,
-}: AddSourceDialogProps) {
+  onDone,
+}: {
+  workspaceId: string;
+  onDone: () => void;
+}) {
   const router = useRouter();
   const createSource = useCreateSource(workspaceId);
   const uploadPdf = useUploadPdfSource(workspaceId);
@@ -64,146 +83,75 @@ export function AddSourceDialog({
     importWebsite.isPending ||
     importYoutube.isPending;
 
-  function resetForm() {
-    setError(null);
-    setTextTitle("");
-    setTextContent("");
-    setMarkdownTitle("");
-    setMarkdownContent("");
-    setPdfTitle("");
-    setPdfFile(null);
-    setWebsiteUrl("");
-    setWebsiteTitle("");
-    setYoutubeUrl("");
-    setYoutubeTitle("");
+  function handleSuccess(source: Source) {
+    onDone();
+    toast.add({
+      title: `Added “${source.title}”`,
+      description:
+        "Indexing has started. Answers can use it once it finishes.",
+      type: "success",
+      actionProps: {
+        children: "Open",
+        onClick: () =>
+          router.push(sourceRoutes.detail(workspaceId, source.id)),
+      },
+    });
   }
 
-  function handleOpenChange(nextOpen: boolean) {
-    if (!nextOpen) {
-      resetForm();
-    }
-    onOpenChange(nextOpen);
-  }
-
-  async function handleSuccess(sourceId: string) {
-    handleOpenChange(false);
-    router.push(sourceRoutes.detail(workspaceId, sourceId));
-    router.refresh();
-  }
-
-  async function submitText() {
+  async function run(
+    action: () => Promise<Source>,
+    fallbackMessage: string,
+  ) {
     setError(null);
     try {
-      const source = await createSource.mutateAsync({
-        type: "TEXT",
-        title: textTitle,
-        content: textContent,
-      });
-      await handleSuccess(source.id);
+      handleSuccess(await action());
     } catch (submitError) {
-      setError(
-        submitError instanceof Error
-          ? submitError.message
-          : "Failed to add text source",
-      );
+      setError(errorText(submitError, fallbackMessage));
     }
   }
 
-  async function submitMarkdown() {
-    setError(null);
-    try {
-      const source = await createSource.mutateAsync({
-        type: "MARKDOWN",
-        title: markdownTitle,
-        content: markdownContent,
-      });
-      await handleSuccess(source.id);
-    } catch (submitError) {
-      setError(
-        submitError instanceof Error
-          ? submitError.message
-          : "Failed to add markdown source",
-      );
-    }
-  }
-
-  async function submitPdf() {
-    setError(null);
-
-    if (!pdfFile) {
-      setError("Choose a PDF file to upload.");
-      return;
-    }
-
-    try {
-      const source = await uploadPdf.mutateAsync({
-        file: pdfFile,
-        title: pdfTitle || undefined,
-      });
-      await handleSuccess(source.id);
-    } catch (submitError) {
-      setError(
-        submitError instanceof Error
-          ? submitError.message
-          : "Failed to upload PDF",
-      );
-    }
-  }
-
-  async function submitWebsite() {
-    setError(null);
-    try {
-      const source = await importWebsite.mutateAsync({
-        url: websiteUrl,
-        title: websiteTitle || undefined,
-      });
-      await handleSuccess(source.id);
-    } catch (submitError) {
-      setError(
-        submitError instanceof Error
-          ? submitError.message
-          : "Failed to import website",
-      );
-    }
-  }
-
-  async function submitYoutube() {
-    setError(null);
-    try {
-      const source = await importYoutube.mutateAsync({
-        url: youtubeUrl,
-        title: youtubeTitle || undefined,
-      });
-      await handleSuccess(source.id);
-    } catch (submitError) {
-      setError(
-        submitError instanceof Error
-          ? submitError.message
-          : "Failed to import YouTube transcript",
-      );
-    }
+  function onSubmit(handler: () => void) {
+    return (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      handler();
+    };
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>Add source</DialogTitle>
-          <DialogDescription>
-            Add knowledge to this workspace from text, files, or the web.
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <DialogHeader>
+        <DialogTitle>Add a source</DialogTitle>
+        <DialogDescription>
+          Answers in this notebook will cite what you add here.
+        </DialogDescription>
+      </DialogHeader>
 
-        <Tabs defaultValue="text">
-          <TabsList className="w-full">
-            <TabsTrigger value="text">Text</TabsTrigger>
-            <TabsTrigger value="markdown">Markdown</TabsTrigger>
-            <TabsTrigger value="pdf">PDF</TabsTrigger>
-            <TabsTrigger value="website">Website</TabsTrigger>
-            <TabsTrigger value="youtube">YouTube</TabsTrigger>
-          </TabsList>
+      <Tabs defaultValue="text">
+        <TabsList className="w-full overflow-x-auto">
+          {TABS.map((tab) => (
+            <TabsTrigger key={tab.value} value={tab.value}>
+              <SourceTypeIcon type={tab.type} className="size-3.5" />
+              <span className="max-sm:sr-only">{tab.label}</span>
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-          <TabsContent value="text" className="grid gap-4 pt-2">
+        <TabsContent value="text" className="pt-3">
+          <form
+            className="grid gap-4"
+            onSubmit={onSubmit(
+              () =>
+                void run(
+                  () =>
+                    createSource.mutateAsync({
+                      type: "TEXT",
+                      title: textTitle,
+                      content: textContent,
+                    }),
+                  "Could not add the text.",
+                ),
+            )}
+          >
             <Field
               id="text-title"
               label="Title"
@@ -211,26 +159,41 @@ export function AddSourceDialog({
               onChange={setTextTitle}
               placeholder="Meeting notes"
               disabled={isPending}
+              required
             />
             <FieldTextarea
               id="text-content"
               label="Content"
               value={textContent}
               onChange={setTextContent}
-              placeholder="Paste your text here..."
+              placeholder="Paste your text here"
               disabled={isPending}
+              required
             />
             <DialogFooter>
-              <SubmitButton
-                pending={createSource.isPending}
-                onClick={() => void submitText()}
-              >
-                Add text source
+              <SubmitButton pending={createSource.isPending}>
+                Add text
               </SubmitButton>
             </DialogFooter>
-          </TabsContent>
+          </form>
+        </TabsContent>
 
-          <TabsContent value="markdown" className="grid gap-4 pt-2">
+        <TabsContent value="markdown" className="pt-3">
+          <form
+            className="grid gap-4"
+            onSubmit={onSubmit(
+              () =>
+                void run(
+                  () =>
+                    createSource.mutateAsync({
+                      type: "MARKDOWN",
+                      title: markdownTitle,
+                      content: markdownContent,
+                    }),
+                  "Could not add the Markdown.",
+                ),
+            )}
+          >
             <Field
               id="markdown-title"
               label="Title"
@@ -238,27 +201,45 @@ export function AddSourceDialog({
               onChange={setMarkdownTitle}
               placeholder="Research notes"
               disabled={isPending}
+              required
             />
             <FieldTextarea
               id="markdown-content"
               label="Markdown"
               value={markdownContent}
               onChange={setMarkdownContent}
-              placeholder="# Heading&#10;&#10;Write markdown here..."
+              placeholder={"# Heading\n\nWrite Markdown here"}
               disabled={isPending}
               rows={8}
+              required
+              mono
             />
             <DialogFooter>
-              <SubmitButton
-                pending={createSource.isPending}
-                onClick={() => void submitMarkdown()}
-              >
-                Add markdown source
+              <SubmitButton pending={createSource.isPending}>
+                Add Markdown
               </SubmitButton>
             </DialogFooter>
-          </TabsContent>
+          </form>
+        </TabsContent>
 
-          <TabsContent value="pdf" className="grid gap-4 pt-2">
+        <TabsContent value="pdf" className="pt-3">
+          <form
+            className="grid gap-4"
+            onSubmit={onSubmit(() => {
+              if (!pdfFile) {
+                setError("Choose a PDF file to upload.");
+                return;
+              }
+              void run(
+                () =>
+                  uploadPdf.mutateAsync({
+                    file: pdfFile,
+                    title: pdfTitle || undefined,
+                  }),
+                "Could not upload the PDF.",
+              );
+            })}
+          >
             <Field
               id="pdf-title"
               label="Title (optional)"
@@ -274,10 +255,9 @@ export function AddSourceDialog({
                 type="file"
                 accept="application/pdf"
                 disabled={isPending}
-                onChange={(event) => {
-                  const file = event.target.files?.[0] ?? null;
-                  setPdfFile(file);
-                }}
+                onChange={(event) =>
+                  setPdfFile(event.target.files?.[0] ?? null)
+                }
               />
               {pdfFile ? (
                 <p className="text-xs text-muted-foreground">
@@ -286,23 +266,37 @@ export function AddSourceDialog({
               ) : null}
             </div>
             <DialogFooter>
-              <SubmitButton
-                pending={uploadPdf.isPending}
-                onClick={() => void submitPdf()}
-              >
+              <SubmitButton pending={uploadPdf.isPending}>
                 Upload PDF
               </SubmitButton>
             </DialogFooter>
-          </TabsContent>
+          </form>
+        </TabsContent>
 
-          <TabsContent value="website" className="grid gap-4 pt-2">
+        <TabsContent value="website" className="pt-3">
+          <form
+            className="grid gap-4"
+            onSubmit={onSubmit(
+              () =>
+                void run(
+                  () =>
+                    importWebsite.mutateAsync({
+                      url: websiteUrl,
+                      title: websiteTitle || undefined,
+                    }),
+                  "Could not import the page.",
+                ),
+            )}
+          >
             <Field
               id="website-url"
-              label="Website URL"
+              label="Page address"
+              type="url"
               value={websiteUrl}
               onChange={setWebsiteUrl}
               placeholder="https://example.com/article"
               disabled={isPending}
+              required
             />
             <Field
               id="website-title"
@@ -313,23 +307,37 @@ export function AddSourceDialog({
               disabled={isPending}
             />
             <DialogFooter>
-              <SubmitButton
-                pending={importWebsite.isPending}
-                onClick={() => void submitWebsite()}
-              >
-                Import website
+              <SubmitButton pending={importWebsite.isPending}>
+                Import page
               </SubmitButton>
             </DialogFooter>
-          </TabsContent>
+          </form>
+        </TabsContent>
 
-          <TabsContent value="youtube" className="grid gap-4 pt-2">
+        <TabsContent value="youtube" className="pt-3">
+          <form
+            className="grid gap-4"
+            onSubmit={onSubmit(
+              () =>
+                void run(
+                  () =>
+                    importYoutube.mutateAsync({
+                      url: youtubeUrl,
+                      title: youtubeTitle || undefined,
+                    }),
+                  "Could not import the transcript.",
+                ),
+            )}
+          >
             <Field
               id="youtube-url"
-              label="YouTube URL"
+              label="Video address"
+              type="url"
               value={youtubeUrl}
               onChange={setYoutubeUrl}
               placeholder="https://www.youtube.com/watch?v=..."
               disabled={isPending}
+              required
             />
             <Field
               id="youtube-title"
@@ -340,17 +348,35 @@ export function AddSourceDialog({
               disabled={isPending}
             />
             <DialogFooter>
-              <SubmitButton
-                pending={importYoutube.isPending}
-                onClick={() => void submitYoutube()}
-              >
+              <SubmitButton pending={importYoutube.isPending}>
                 Import transcript
               </SubmitButton>
             </DialogFooter>
-          </TabsContent>
-        </Tabs>
+          </form>
+        </TabsContent>
+      </Tabs>
 
-        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {error ? (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+export function AddSourceDialog({
+  workspaceId,
+  open,
+  onOpenChange,
+}: AddSourceDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-xl">
+        <AddSourceForm
+          workspaceId={workspaceId}
+          onDone={() => onOpenChange(false)}
+        />
       </DialogContent>
     </Dialog>
   );
@@ -363,6 +389,8 @@ function Field({
   onChange,
   placeholder,
   disabled,
+  required,
+  type,
 }: {
   id: string;
   label: string;
@@ -370,16 +398,20 @@ function Field({
   onChange: (value: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  required?: boolean;
+  type?: string;
 }) {
   return (
     <div className="grid gap-2">
       <Label htmlFor={id}>{label}</Label>
       <Input
         id={id}
+        type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         disabled={disabled}
+        required={required}
       />
     </div>
   );
@@ -392,7 +424,9 @@ function FieldTextarea({
   onChange,
   placeholder,
   disabled,
+  required,
   rows = 6,
+  mono = false,
 }: {
   id: string;
   label: string;
@@ -400,7 +434,9 @@ function FieldTextarea({
   onChange: (value: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  required?: boolean;
   rows?: number;
+  mono?: boolean;
 }) {
   return (
     <div className="grid gap-2">
@@ -411,7 +447,9 @@ function FieldTextarea({
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         disabled={disabled}
+        required={required}
         rows={rows}
+        className={cn("max-h-64 min-h-32", mono && "font-mono text-xs")}
       />
     </div>
   );
@@ -420,14 +458,12 @@ function FieldTextarea({
 function SubmitButton({
   children,
   pending,
-  onClick,
 }: {
   children: React.ReactNode;
   pending: boolean;
-  onClick: () => void;
 }) {
   return (
-    <Button type="button" disabled={pending} onClick={onClick}>
+    <Button type="submit" disabled={pending}>
       {pending ? <Spinner /> : null}
       {children}
     </Button>

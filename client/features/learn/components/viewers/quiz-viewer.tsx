@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { CheckIcon, RotateCcwIcon, TrophyIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,13 +18,6 @@ export function QuizViewer({ questions }: { questions: QuizQuestion[] }) {
   const [selected, setSelected] = useState<number | null>(null);
   const [score, setScore] = useState(0);
   const [finished, setFinished] = useState(false);
-
-  useEffect(() => {
-    setIndex(0);
-    setSelected(null);
-    setScore(0);
-    setFinished(false);
-  }, [questions]);
 
   const question = questions[index];
 
@@ -73,7 +66,7 @@ export function QuizViewer({ questions }: { questions: QuizQuestion[] }) {
         initial={{ opacity: 0, scale: 0.94 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ type: "spring", stiffness: 260, damping: 24 }}
-        className="mx-auto max-w-lg space-y-5 rounded-3xl border bg-card p-8 text-center"
+        className="mx-auto max-w-lg space-y-5 rounded-xl border bg-card p-8 text-center"
       >
         <motion.div
           initial={{ scale: 0, rotate: -30 }}
@@ -86,7 +79,7 @@ export function QuizViewer({ questions }: { questions: QuizQuestion[] }) {
           }}
           className="mx-auto flex size-16 items-center justify-center rounded-full bg-primary/15"
         >
-          <TrophyIcon className="size-7 text-primary" />
+          <TrophyIcon className="size-7 text-primary-ink" />
         </motion.div>
 
         <div className="space-y-1">
@@ -175,14 +168,14 @@ export function QuizViewer({ questions }: { questions: QuizQuestion[] }) {
                     duration: 0.2,
                   }}
                   whileTap={revealed ? undefined : { scale: 0.985 }}
-                  className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left text-sm transition-colors ${stateClass}`}
+                  className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm transition-colors ${stateClass}`}
                 >
                   <span
                     className={`flex size-6 shrink-0 items-center justify-center rounded-full border text-xs font-medium ${
                       revealed && isCorrect
                         ? "border-primary bg-primary text-primary-foreground"
                         : revealed && isSelected
-                          ? "border-destructive bg-destructive text-white"
+                          ? "border-destructive bg-destructive text-background"
                           : "border-border text-muted-foreground"
                     }`}
                   >
@@ -211,8 +204,8 @@ export function QuizViewer({ questions }: { questions: QuizQuestion[] }) {
             transition={{ duration: 0.22 }}
             className="overflow-hidden"
           >
-            <div className="space-y-3 rounded-2xl border bg-muted/30 p-4">
-              <p className="text-xs tracking-wider text-muted-foreground uppercase">
+            <div className="space-y-3 rounded-xl border bg-muted/30 p-4">
+              <p className="text-xs font-medium text-muted-foreground">
                 {selected === question.correctIndex ? "Correct" : "Not quite"}
               </p>
               <StreamdownContent

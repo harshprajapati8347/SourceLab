@@ -45,3 +45,8 @@ export async function apiFetch<T>(
 
   return data as T;
 }
+
+/** A message that is safe to show: the API's own error text, or the fallback. */
+export function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof ApiError && error.message ? error.message : fallback;
+}

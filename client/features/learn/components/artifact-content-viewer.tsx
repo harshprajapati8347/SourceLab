@@ -1,5 +1,6 @@
 "use client";
 
+import { MotionConfig } from "motion/react";
 import type { LearningArtifact } from "../lib/types";
 import { FlashcardsViewer } from "./viewers/flashcards-viewer";
 import { MindMapViewer } from "./viewers/mindmap-viewer";
@@ -13,7 +14,7 @@ type ArtifactContentViewerProps = {
   workspaceId: string;
 };
 
-export function ArtifactContentViewer({
+function ViewerSwitch({
   artifact,
   workspaceId,
 }: ArtifactContentViewerProps) {
@@ -78,4 +79,16 @@ export function ArtifactContentViewer({
     default:
       return null;
   }
+}
+
+/** Renders the viewer for an artifact. Remounts if the artifact is regenerated, and honours reduced-motion settings. */
+export function ArtifactContentViewer(props: ArtifactContentViewerProps) {
+  return (
+    <MotionConfig reducedMotion="user">
+      <ViewerSwitch
+        key={`${props.artifact.id}-${props.artifact.updatedAt}`}
+        {...props}
+      />
+    </MotionConfig>
+  );
 }

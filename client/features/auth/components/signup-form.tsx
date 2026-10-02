@@ -96,7 +96,7 @@ export function SignupForm({
       <div className={cn("flex flex-col gap-6", className)} {...props}>
         <Card>
           <CardHeader className="text-center">
-            <CardTitle className="text-xl">Check your email</CardTitle>
+            <CardTitle className="text-xl font-bold">Check your email</CardTitle>
             <CardDescription>
               We sent a verification link to {email}. Verify your address before
               signing in.
@@ -121,7 +121,7 @@ export function SignupForm({
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
         <CardHeader className="text-center">
-          <CardTitle className="text-xl">Create an account</CardTitle>
+          <CardTitle className="text-xl font-bold">Create an account</CardTitle>
           <CardDescription>
             Sign up with Google or email. Email accounts need verification
             before you can sign in.
@@ -194,7 +194,9 @@ export function SignupForm({
                   />
                 </div>
                 {error ? (
-                  <p className="text-center text-sm text-destructive">{error}</p>
+                  <p role="alert" className="text-center text-sm text-destructive">
+                    {error}
+                  </p>
                 ) : null}
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isEmailLoading ? <Spinner /> : null}

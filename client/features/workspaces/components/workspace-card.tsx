@@ -2,7 +2,12 @@
 
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
-import { MoreHorizontalIcon, PencilIcon, Trash2Icon } from "lucide-react";
+import {
+  ArrowUpRightIcon,
+  MoreHorizontalIcon,
+  PencilIcon,
+  Trash2Icon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -11,7 +16,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { getWorkspaceGradient } from "../lib/workspace-gradients";
 import { workspaceRoutes } from "../lib/routes";
 import type { Workspace } from "../lib/types";
 
@@ -28,84 +32,81 @@ export function WorkspaceCard({
   onDelete,
   className,
 }: WorkspaceCardProps) {
-  const href = workspaceRoutes.detail(workspace.id);
-  const gradient = getWorkspaceGradient(workspace.id);
-
   return (
     <article
       className={cn(
-        "group/card relative min-h-[196px] overflow-hidden rounded-3xl shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg",
+        "group relative flex min-h-44 flex-col rounded-xl border bg-card p-4 transition-[border-color,background-color] duration-200 ease-house hover:border-primary/40 hover:bg-card focus-within:border-primary/40",
         className,
       )}
     >
-      <Link
-        href={href}
-        className={cn(
-          "absolute inset-0 z-0 rounded-3xl bg-linear-to-br focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-          gradient,
-        )}
-        aria-label={`Open ${workspace.title}`}
-      />
+      <div className="flex items-start justify-between gap-3">
+        <span
+          aria-hidden="true"
+          className="flex size-10 items-center justify-center rounded-lg border bg-muted text-xl"
+        >
+          {workspace.icon ?? "📚"}
+        </span>
 
-      <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-black/35 via-black/5 to-white/10" />
-
-      <div className="pointer-events-none relative flex h-full min-h-[196px] flex-col p-5">
-        <div className="flex items-start justify-between gap-2">
-          <span className="flex size-11 items-center justify-center rounded-2xl bg-white/20 text-2xl backdrop-blur-sm">
-            {workspace.icon ?? "📚"}
-          </span>
-
-          <div
-            className="pointer-events-auto relative z-10"
-            onClick={(event) => event.stopPropagation()}
-            onKeyDown={(event) => event.stopPropagation()}
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="relative z-10 text-muted-foreground transition-opacity md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100 data-popup-open:opacity-100"
+                aria-label={`Actions for ${workspace.title}`}
+              />
+            }
           >
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="size-8 bg-black/15 text-white hover:bg-black/25 hover:text-white"
-                  />
-                }
-              >
-                <MoreHorizontalIcon />
-                <span className="sr-only">Open menu</span>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => onEdit(workspace)}>
-                  <PencilIcon />
-                  Edit
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  variant="destructive"
-                  onClick={() => onDelete(workspace)}
-                >
-                  <Trash2Icon />
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
+            <MoreHorizontalIcon />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-40">
+            <DropdownMenuItem onClick={() => onEdit(workspace)}>
+              <PencilIcon />
+              Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={() => onDelete(workspace)}
+            >
+              <Trash2Icon />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
-        <div className="mt-auto space-y-1.5 pt-8 text-white">
-          <h3 className="line-clamp-2 font-heading text-lg font-semibold leading-snug drop-shadow-sm">
+      <div className="mt-4 min-w-0 flex-1">
+        <h3 className="line-clamp-1 font-heading text-base font-semibold">
+          <Link
+            href={workspaceRoutes.detail(workspace.id)}
+            className="outline-none after:absolute after:inset-0 after:rounded-xl focus-visible:after:ring-3 focus-visible:after:ring-ring/40"
+          >
             {workspace.title}
-          </h3>
-          {workspace.description ? (
-            <p className="line-clamp-2 text-sm text-white/85">
-              {workspace.description}
-            </p>
-          ) : null}
-          <p className="text-xs text-white/70">
-            Updated{" "}
-            {formatDistanceToNow(new Date(workspace.updatedAt), {
-              addSuffix: true,
-            })}
+          </Link>
+        </h3>
+        {workspace.description ? (
+          <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
+            {workspace.description}
           </p>
-        </div>
+        ) : (
+          <p className="mt-1 text-sm text-muted-foreground/70">
+            No description yet.
+          </p>
+        )}
+      </div>
+
+      <div className="mt-4 flex items-center justify-between border-t pt-3 text-xs text-muted-foreground">
+        <span>
+          Updated{" "}
+          {formatDistanceToNow(new Date(workspace.updatedAt), {
+            addSuffix: true,
+          })}
+        </span>
+        <ArrowUpRightIcon
+          aria-hidden="true"
+          className="size-3.5 transition-all duration-200 ease-house group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary-ink"
+        />
       </div>
     </article>
   );

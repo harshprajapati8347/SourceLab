@@ -5,14 +5,14 @@
 | Layer                 | Tool                                                     | Purpose                                                             |
 | ---------------------- | --------------------------------------------------------- | -------------------------------------------------------------------- |
 | Client framework      | Next.js 16 (App Router), React 19, TypeScript             | Full stack-capable frontend, used here as a client + server-component shell over the Express API |
-| Client styling        | Tailwind CSS v4 + shadcn/ui (`base-rhea` style, `base-ui/react` primitives) | Design system and components |
+| Client styling        | Tailwind CSS v4 + shadcn/ui (`base-rhea` style, `base-ui/react` primitives) | Design system and components: dark-first, amber accent, Manrope (see `ui-tokens.md`) |
 | Client state (server) | `@tanstack/react-query`                                    | Data fetching, caching, mutations against the API |
-| Client state (local)  | `zustand`                                                  | Small persisted UI state (chat preferences: model + web search toggle) |
+| Client state (local)  | `zustand`                                                  | Small UI state: chat preferences (model + web search toggle, persisted) and `shared/stores/ui-store.ts` (command palette, shortcuts dialog, create/add dialogs, sources panel) |
 | Chat streaming        | `ai` (Vercel AI SDK) + `@ai-sdk/react` + `@ai-sdk/openai`  | `useChat`, `DefaultChatTransport`, `streamText`/`generateText` |
 | Auth (client)         | `better-auth/react`                                        | `createAuthClient`, `signIn`, `signOut`, `useSession` |
 | Markdown rendering    | `streamdown` (+ `@streamdown/code`)                        | Renders streamed/markdown chat and report content |
 | Mind maps             | `@xyflow/react`                                            | Interactive node/edge mind map viewer |
-| Dark mode             | `next-themes`                                              | Theme provider + toggle |
+| Dark mode             | `next-themes`                                              | Theme provider (dark default, light and system supported). The switch is in `UserMenu` |
 | Server framework      | Express 5 (ESM, TypeScript, `tsx` for dev)                 | REST API |
 | Auth (server)         | `better-auth` + `better-auth/adapters/prisma` + `@better-auth/stripe` | Google OAuth, email/password, Stripe subscriptions, mounted at `/api/auth/*` |
 | ORM / DB              | Prisma 7 (`@prisma/client`, `@prisma/adapter-pg`) + PostgreSQL | Relational data: users, workspaces, sources, chunks, conversations, messages, artifacts |
@@ -41,7 +41,7 @@
 ├── .github/workflows/             → GitHub Actions: build server image, deploy to EC2
 ├── client/                        → Next.js 16 App Router frontend
 │   ├── app/
-│   │   ├── layout.tsx             → Root layout — fonts, ThemeProvider, QueryProvider
+│   │   ├── layout.tsx             → Root layout — Manrope + JetBrains Mono, ThemeProvider, QueryProvider, TooltipProvider, Toaster
 │   │   ├── page.tsx               → Homepage — redirects to dashboard or shows sign-in CTA
 │   │   ├── globals.css            → Tailwind v4 theme tokens (CSS variables)
 │   │   ├── (auth)/
@@ -51,6 +51,7 @@
 │   │   │   └── reset-password/page.tsx
 │   │   ├── pricing/page.tsx       → Public Free vs Pro
 │   │   └── (protected)/
+│   │       (workspace/[id]/layout.tsx mounts WorkspaceShell once; its pages render only content)
 │   │       ├── dashboard/page.tsx
 │   │       ├── settings/memory/page.tsx
 │   │       ├── settings/billing/page.tsx
@@ -62,21 +63,23 @@
 │   │           ├── sources/[sourceId]/page.tsx    → Source detail
 │   │           └── settings/page.tsx              → Workspace settings
 │   ├── features/                  → Feature-based modules (primary organizational unit)
-│   │   ├── auth/                  → login/signup/reset forms, sign-out, session hook, auth-client/server
+│   │   ├── auth/                  → login/signup/reset forms, user menu, sign-out hook, session hook, auth-client/server
 │   │   ├── billing/               → pricing page, billing settings, credits badge
+│   │   ├── landing/               → signed-out landing page
 │   │   ├── chat/                  → chat UI, citations, conversation hooks, chat-preferences store, markdown export
 │   │   ├── learn/                 → artifact hub, generate dialog, per-type viewers
 │   │   ├── memory/                → memory settings page, form dialog, hooks
 │   │   ├── sources/                → source library, add-source dialog, source card/detail, hooks
-│   │   └── workspaces/             → dashboard, workspace shell (sidebar), workspace CRUD dialogs, hooks
+│   │   └── workspaces/             → dashboard, app header/account shell, workspace shell + sidebar, command palette, workspace CRUD dialogs, hooks
 │   │       Each feature folder follows: components/, hooks/, lib/{api,types,routes,constants}.ts, index.ts (barrel export)
 │   ├── components/ui/              → shadcn/ui primitives (button, dialog, sidebar, message, attachment, etc.) — generated, not hand-rolled
 │   ├── shared/
 │   │   ├── components/providers/   → QueryProvider, ThemeProvider (active app-wide providers)
-│   │   ├── components/streamdown-content.tsx
-│   │   ├── hooks/                  → use-mobile, use-debounced-value
+│   │   ├── components/             → brand-mark, page-header, shortcuts-dialog, cited-answer-preview, streamdown-content
+│   │   ├── stores/ui-store.ts      → command palette, shortcuts dialog, create/add dialogs, sources panel
+│   │   ├── hooks/                  → use-mobile, use-debounced-value, use-keyboard-shortcuts
 │   │   └── lib/api.ts              → apiFetch() + ApiError — single fetch wrapper for all client API calls
-│   ├── lib/utils.ts                → cn() helper (used everywhere)
+│   ├── lib/utils.ts                → cn() helper (used everywhere; the only file in client/lib)
 │   └── components.json             → shadcn config (style: base-rhea, base color: stone, icon lib: lucide)
 └── server/                         → Express API
     ├── src/

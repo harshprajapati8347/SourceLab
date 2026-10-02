@@ -17,19 +17,19 @@ export function CreateWorkspaceCard({
       type="button"
       onClick={onClick}
       className={cn(
-        "group flex min-h-[196px] flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed border-border/80 bg-card/50 p-6 text-center transition-all hover:border-primary/40 hover:bg-muted/40 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        "group flex min-h-44 flex-col items-center justify-center gap-3 rounded-xl border border-dashed bg-transparent p-6 text-center outline-none transition-[border-color,background-color] duration-200 ease-house hover:border-primary/50 hover:bg-primary/5 focus-visible:border-primary/50 focus-visible:ring-3 focus-visible:ring-ring/30",
         className,
       )}
     >
-      <span className="flex size-12 items-center justify-center rounded-full bg-muted transition-colors group-hover:bg-primary/10">
-        <PlusIcon className="size-5 text-muted-foreground transition-colors group-hover:text-primary" />
+      <span className="flex size-10 items-center justify-center rounded-lg bg-primary/15 text-primary-ink transition-colors group-hover:bg-primary/25">
+        <PlusIcon className="size-5" />
       </span>
-      <div className="space-y-1">
-        <p className="font-medium">Create notebook</p>
-        <p className="text-xs text-muted-foreground">
-          Upload sources and start chatting
-        </p>
-      </div>
+      <span className="space-y-1">
+        <span className="block text-sm font-semibold">New notebook</span>
+        <span className="block text-xs text-muted-foreground">
+          Add sources, then ask questions
+        </span>
+      </span>
     </button>
   );
 }

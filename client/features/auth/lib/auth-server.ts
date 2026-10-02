@@ -1,9 +1,10 @@
+import { cache } from "react";
 import { headers } from "next/headers";
 import { authClient } from "./auth-client";
 
 export type Session = typeof authClient.$Infer.Session;
 
-export async function getSession(): Promise<Session | null> {
+async function fetchSession(): Promise<Session | null> {
   const requestHeaders = await headers();
   const cookie = requestHeaders.get("cookie") ?? "";
 
@@ -22,3 +23,6 @@ export async function getSession(): Promise<Session | null> {
   const data = (await response.json()) as Session | null;
   return data?.user ? data : null;
 }
+
+/** Memoized per request, so a layout and its page share one session lookup. */
+export const getSession = cache(fetchSession);

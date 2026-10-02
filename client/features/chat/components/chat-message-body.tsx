@@ -49,7 +49,7 @@ export function ChatMessageBody({
 
           if (!citation) {
             return (
-              <span className="font-medium text-primary">[W{webIndex}]</span>
+              <span className="font-medium text-primary-ink">[W{webIndex}]</span>
             );
           }
 
@@ -68,7 +68,7 @@ export function ChatMessageBody({
 
         if (!citation) {
           return (
-            <span className="font-medium text-primary">[{citationIndex}]</span>
+            <span className="font-medium text-primary-ink">[{citationIndex}]</span>
           );
         }
 

@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>SourceLab · Technical RAG Architecture</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  >
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #09090b;
+      --surface: #111113;
+      --border: #27272a;
+      --accent: #f2a23a;
+      --text: #fafafa;
+      --muted: #a1a1aa;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      min-height: 100vh;
+
+      background:
+        radial-gradient(
+          circle at 50% -10%,
+          rgba(242, 162, 58, 0.09),
+          transparent 35%
+        ),
+        radial-gradient(
+          circle at 10% 50%,
+          rgba(255, 255, 255, 0.025),
+          transparent 30%
+        ),
+        var(--bg);
+
+      color: var(--text);
+      font-family: "Inter", sans-serif;
+
+      display: flex;
+      justify-content: center;
+      align-items: center;
+
+      padding: 48px 24px;
+    }
+
+    .wrapper {
+      position: relative;
+
+      width: 100%;
+      max-width: 1180px;
+
+      padding: 34px;
+
+      background:
+        linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.025),
+          rgba(255, 255, 255, 0)
+        ),
+        var(--surface);
+
+      border: 1px solid var(--border);
+      border-radius: 24px;
+
+      box-shadow:
+        0 30px 80px rgba(0, 0, 0, 0.65),
+        0 0 0 1px rgba(255, 255, 255, 0.015) inset;
+
+      overflow: hidden;
+    }
+
+    .wrapper::before {
+      content: "";
+
+      position: absolute;
+      top: 0;
+      left: 10%;
+      right: 10%;
+
+      height: 1px;
+
+      background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(242, 162, 58, 0.8),
+        transparent
+      );
+
+      opacity: 0.8;
+    }
+
+    .mermaid {
+      width: 100%;
+
+      display: flex;
+      justify-content: center;
+      align-items: center;
+
+      overflow-x: auto;
+
+      padding: 8px;
+    }
+
+    .mermaid svg {
+      width: 100% !important;
+      max-width: 1120px !important;
+      height: auto !important;
+
+      display: block;
+      overflow: visible;
+    }
+
+    .mermaid text {
+      font-family: "Inter", sans-serif !important;
+      letter-spacing: -0.01em;
+    }
+
+    .mermaid .node rect,
+    .mermaid .node polygon,
+    .mermaid .node path {
+      rx: 12px;
+      ry: 12px;
+    }
+
+    .mermaid .cluster rect {
+      rx: 18px;
+      ry: 18px;
+
+      fill: #101012 !important;
+      stroke: #29292d !important;
+    }
+
+    .mermaid .cluster-label text {
+      fill: #d4d4d8 !important;
+
+      font-family: "Inter", sans-serif !important;
+      font-size: 14px !important;
+      font-weight: 600 !important;
+    }
+
+    .mermaid .edgePath path {
+      stroke: var(--accent) !important;
+      stroke-width: 1.7px !important;
+      opacity: 0.85;
+    }
+
+    .mermaid marker path {
+      fill: var(--accent) !important;
+      stroke: var(--accent) !important;
+    }
+
+    .mermaid .edgeLabel {
+      background: #111113 !important;
+      color: #d4d4d8 !important;
+    }
+
+    .mermaid .edgeLabel rect {
+      fill: #111113 !important;
+      opacity: 0.95;
+    }
+
+    .mermaid .nodeLabel {
+      font-family: "Inter", sans-serif !important;
+      line-height: 1.45 !important;
+    }
+
+    @media (max-width: 900px) {
+      body {
+        padding: 24px 14px;
+        align-items: flex-start;
+      }
+
+      .wrapper {
+        padding: 20px 12px;
+        border-radius: 18px;
+      }
+
+      .mermaid {
+        justify-content: flex-start;
+        padding: 4px;
+      }
+
+      .mermaid svg {
+        min-width: 760px;
+      }
+    }
+
+    @media (max-width: 600px) {
+      body {
+        padding: 12px 8px;
+      }
+
+      .wrapper {
+        padding: 14px 8px;
+        border-radius: 16px;
+      }
+
+      .mermaid svg {
+        min-width: 720px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="wrapper">
+
+    <div class="mermaid">
+
+flowchart TD
+
+    %% Technical Node Styling Classes
+    classDef ingestStyle fill:#17212b,stroke:#38BDF8,stroke-width:2px,color:#F8FAFC;
+    classDef chunkStyle fill:#241442,stroke:#C084FC,stroke-width:2px,color:#F3E8FF;
+    classDef vectorStyle fill:#0b3b30,stroke:#34D399,stroke-width:2px,color:#ECFDF5;
+    classDef queryStyle fill:#25234d,stroke:#818CF8,stroke-width:2px,color:#EEF2FF;
+    classDef cragStyle fill:#4d1634,stroke:#F472B6,stroke-width:2px,color:#FCE7F3;
+    classDef genStyle fill:#3d1c08,stroke:#F59E0B,stroke-width:2px,color:#FEF3C7;
+    classDef citeStyle fill:#123b24,stroke:#4ADE80,stroke-width:2px,color:#F0FDF4;
+
+    %% 1. Ingestion & Vector Indexing Phase
+    subgraph PHASE1["1. Data Ingestion & Vector Storage Pipeline"]
+
+      SRC["📥 <b>Raw Data Ingestion</b><br/>PDF Documents • Plain Text • Web Pages • YouTube Captions • VTT Files"]:::ingestStyle
+
+      PARSE["⚙️ <b>Document Parsers & Extractors</b><br/>PdfExtractor • HtmlExtractor • YouTubeLoader • VttExtractor"]:::ingestStyle
+
+      CHUNK["✂️ <b>Hierarchical & Semantic Chunker</b><br/>Text Splitting (500-1000 Tokens) + Header & Timestamp Metadata"]:::chunkStyle
+
+      EMBED["🧠 <b>Vector Embedding Generator</b><br/>Generates Dense High-Dimensional Vector Embeddings"]:::vectorStyle
+
+      STORE[("💾 <b>Qdrant Vector Database</b><br/>Cosine Similarity Indexing + Notebook ID Payload Isolation")]:::vectorStyle
+
+      SRC --> PARSE --> CHUNK --> EMBED --> STORE
+
+    end
+
+    %% 2. Query Transformation & Retrieval Phase
+    subgraph PHASE2["2. Query Transformation & Vector Search"]
+
+      QUERY["💬 <b>Natural Language User Query</b>"]:::queryStyle
+
+      INGUARD["🛡️ <b>Input Guardrails Service</b><br/>Query Sanitization • Max Length • Injection Defense"]:::queryStyle
+
+      QTRANS["🔄 <b>Query Transformation Strategies</b><br/>Rewrite • StepBack • SubQuestion Composite Expansion"]:::queryStyle
+
+      SEARCH["🔍 <b>Multi-Query Vector Retrieval</b><br/>Parallel Vector Search in Qdrant with Notebook Filters"]:::vectorStyle
+
+      QUERY --> INGUARD --> QTRANS --> SEARCH
+      STORE -.->|Vector Search| SEARCH
+
+    end
+
+    %% 3. CRAG Quality Gate & Reranking Phase
+    subgraph PHASE3["3. Corrective RAG Gate & Context Reranking"]
+
+      CRAG["🎯 <b>Corrective RAG (CRAG) Service</b><br/>Evaluates Context Relevance • Triggers Adaptive Query Retries / Fallback"]:::cragStyle
+
+      RERANK["⚖️ <b>LLM Context Reranker</b><br/>Re-scores Candidate Snippets & Orders Top Relevant Context"]:::cragStyle
+
+      SEARCH --> CRAG --> RERANK
+
+    end
+
+    %% 4. Prompt Engineering & Generation Phase
+    subgraph PHASE4["4. Response Generation & Citation Attribution"]
+
+      PROMPT["📄 <b>Prompt Construction Service</b><br/>Assembles System Directives, User Prompt & Cited Context Chunks"]:::genStyle
+
+      LLM["⚡ <b>LLM Generation Engine</b><br/>Server-Sent Events (SSE) Token Streaming Response"]:::genStyle
+
+      OUTGUARD["🛡️ <b>Output Guardrails Service</b><br/>Response Size Check • Citation Integrity Verification"]:::genStyle
+
+      OUT["📝 <b>Grounded Output with Citations</b><br/>Response containing metadata-linked Citation IDs"]:::citeStyle
+
+      RERANK --> PROMPT --> LLM --> OUTGUARD --> OUT
+
+    end
+
+    %% Subgraph Card Styles
+    style PHASE1 fill:#101012,stroke:#29292d,stroke-width:1.5px,color:#A1A1AA;
+    style PHASE2 fill:#101012,stroke:#29292d,stroke-width:1.5px,color:#A1A1AA;
+    style PHASE3 fill:#101012,stroke:#29292d,stroke-width:1.5px,color:#A1A1AA;
+    style PHASE4 fill:#101012,stroke:#29292d,stroke-width:1.5px,color:#A1A1AA;
+
+    </div>
+
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: "base",
+
+      themeVariables: {
+        background: "#09090b",
+        primaryColor: "#19191d",
+        primaryBorderColor: "#2a2a2e",
+        primaryTextColor: "#fafafa",
+
+        secondaryColor: "#151518",
+        tertiaryColor: "#111113",
+
+        lineColor: "#F2A23A",
+
+        clusterBkg: "#101012",
+        clusterBorder: "#29292d",
+
+        edgeLabelBackground: "#111113",
+
+        fontFamily: "Inter, sans-serif",
+        fontSize: "13px",
+
+        textColor: "#fafafa",
+        nodeBorder: "#2a2a2e"
+      },
+
+      flowchart: {
+        useMaxWidth: true,
+        htmlLabels: true,
+        curve: "basis",
+        nodeSpacing: 34,
+        rankSpacing: 55,
+        padding: 16
+      },
+
+      securityLevel: "loose"
+    });
+  </script>
+
+</body>
+</html>

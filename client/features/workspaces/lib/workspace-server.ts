@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { headers } from "next/headers";
 import type { Workspace } from "./types";
 
@@ -23,6 +24,5 @@ async function fetchWorkspace(id: string): Promise<Workspace | null> {
   return response.json() as Promise<Workspace>;
 }
 
-export async function getWorkspaceOrNull(id: string) {
-  return fetchWorkspace(id);
-}
+/** Memoized per request, so a layout and its page share one fetch. */
+export const getWorkspaceOrNull = cache(fetchWorkspace);

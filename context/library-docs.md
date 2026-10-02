@@ -232,7 +232,7 @@ return result.output;
 
 ### `next-themes`
 
-- `ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange` in the root layout; `ModeToggle` (`components/ui/mode-toggle.tsx`) flips it. Dark mode styling is handled entirely by the `.dark` CSS variable block in `globals.css` — components should never branch on theme in JS, only via CSS variables/Tailwind dark: if ever needed (not currently used anywhere).
+- `ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange` in the root layout; `UserMenu` (`features/auth/components/user-menu.tsx`) and the command palette call `setTheme`. Dark mode styling is handled entirely by the `.dark` CSS variable block in `globals.css` — components should never branch on theme in JS, only via CSS variables/Tailwind dark: if ever needed (not currently used anywhere).
 
 ### `recharts`
 

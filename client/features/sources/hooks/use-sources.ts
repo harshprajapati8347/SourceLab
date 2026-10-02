@@ -1,7 +1,8 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError } from "@/shared/lib/api";
+import { toast } from "@/components/ui/toast";
+import { ApiError, getErrorMessage } from "@/shared/lib/api";
 import { useDebouncedValue } from "@/shared/hooks/use-debounced-value";
 import {
   bulkDeleteSources,
@@ -32,7 +33,11 @@ export function sourceKeys(workspaceId: string) {
   };
 }
 
-export function useSources(workspaceId: string, filters: SourceFilters = {}) {
+export function useSources(
+  workspaceId: string,
+  filters: SourceFilters = {},
+  options: { enabled?: boolean } = {},
+) {
   const debouncedQuery = useDebouncedValue(filters.q ?? "", 300);
   const queryFilters: SourceFilters = {
     ...filters,
@@ -42,6 +47,7 @@ export function useSources(workspaceId: string, filters: SourceFilters = {}) {
   return useQuery({
     queryKey: sourceKeys(workspaceId).list(queryFilters),
     queryFn: () => listSources(workspaceId, queryFilters),
+    enabled: options.enabled ?? true,
     refetchInterval: (query) => {
       const hasProcessing = query.state.data?.some(
         (source) =>
@@ -124,7 +130,15 @@ export function useDeleteSource(workspaceId: string) {
 
   return useMutation({
     mutationFn: (sourceId: string) => deleteSource(workspaceId, sourceId),
+    onError: (error) => {
+      toast.add({
+        title: "Could not delete the source",
+        description: getErrorMessage(error, "Try again in a moment."),
+        type: "error",
+      });
+    },
     onSuccess: (_, sourceId) => {
+      toast.add({ title: "Source deleted", type: "success" });
       queryClient.removeQueries({
         queryKey: sourceKeys(workspaceId).detail(sourceId),
       });
@@ -141,7 +155,21 @@ export function useBulkDeleteSources(workspaceId: string) {
   return useMutation({
     mutationFn: (sourceIds: string[]) =>
       bulkDeleteSources(workspaceId, sourceIds),
-    onSuccess: () => {
+    onError: (error) => {
+      toast.add({
+        title: "Could not delete the selected sources",
+        description: getErrorMessage(error, "Try again in a moment."),
+        type: "error",
+      });
+    },
+    onSuccess: (_, sourceIds) => {
+      toast.add({
+        title:
+          sourceIds.length === 1
+            ? "Source deleted"
+            : `${sourceIds.length} sources deleted`,
+        type: "success",
+      });
       void queryClient.invalidateQueries({
         queryKey: sourceKeys(workspaceId).all,
       });
@@ -155,7 +183,21 @@ export function useReprocessSources(workspaceId: string) {
   return useMutation({
     mutationFn: (sourceIds?: string[]) =>
       reprocessSources(workspaceId, sourceIds),
-    onSuccess: () => {
+    onError: (error) => {
+      toast.add({
+        title: "Could not start reprocessing",
+        description: getErrorMessage(error, "Try again in a moment."),
+        type: "error",
+      });
+    },
+    onSuccess: (result) => {
+      toast.add({
+        title:
+          result.reprocessed === 1
+            ? "Reprocessing 1 source"
+            : `Reprocessing ${result.reprocessed} sources`,
+        type: "success",
+      });
       void queryClient.invalidateQueries({
         queryKey: sourceKeys(workspaceId).all,
       });
@@ -168,7 +210,15 @@ export function useReprocessSource(workspaceId: string) {
 
   return useMutation({
     mutationFn: (sourceId: string) => reprocessSource(workspaceId, sourceId),
+    onError: (error) => {
+      toast.add({
+        title: "Could not start reprocessing",
+        description: getErrorMessage(error, "Try again in a moment."),
+        type: "error",
+      });
+    },
     onSuccess: (_, sourceId) => {
+      toast.add({ title: "Reprocessing the source", type: "success" });
       void queryClient.invalidateQueries({
         queryKey: sourceKeys(workspaceId).detail(sourceId),
       });

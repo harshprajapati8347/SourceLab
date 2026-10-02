@@ -52,7 +52,7 @@ export function ForgotPasswordForm({
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
         <CardHeader className="text-center">
-          <CardTitle className="text-xl">Reset password</CardTitle>
+          <CardTitle className="text-xl font-bold">Reset password</CardTitle>
           <CardDescription>
             {sent
               ? "If an account exists for that email, we sent a reset link."
@@ -85,7 +85,9 @@ export function ForgotPasswordForm({
                   />
                 </div>
                 {error ? (
-                  <p className="text-center text-sm text-destructive">{error}</p>
+                  <p role="alert" className="text-center text-sm text-destructive">
+                    {error}
+                  </p>
                 ) : null}
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? <Spinner /> : null}

@@ -2,10 +2,9 @@
 
 import { useMemo, useState } from "react";
 import {
-  BookOpenIcon,
+  CheckSquareIcon,
   LayoutGridIcon,
   ListIcon,
-  MoreHorizontalIcon,
   PlusIcon,
   RefreshCwIcon,
   SearchIcon,
@@ -25,13 +24,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   Empty,
   EmptyContent,
   EmptyDescription,
@@ -49,7 +41,9 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
-import { ApiError } from "@/shared/lib/api";
+import { PageHeader } from "@/shared/components/page-header";
+import { getErrorMessage } from "@/shared/lib/api";
+import { useUIStore } from "@/shared/stores/ui-store";
 import {
   useBulkDeleteSources,
   useDeleteSource,
@@ -68,7 +62,6 @@ import type {
   SourceStatus,
   SourceType,
 } from "../lib/types";
-import { AddSourceDialog } from "./add-source-dialog";
 import { SourceCard } from "./source-card";
 
 type SourceLibraryProps = {
@@ -77,16 +70,18 @@ type SourceLibraryProps = {
 
 export function SourceLibrary({ workspaceId }: SourceLibraryProps) {
   const [view, setView] = useState<"grid" | "list">("grid");
-  const [addOpen, setAddOpen] = useState(false);
   const [deletingSource, setDeletingSource] = useState<Source | null>(null);
   const [filters, setFilters] = useState<SourceFilters>({});
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [selectionMode, setSelectionMode] = useState(false);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+
+  const setAddSourceOpen = useUIStore((state) => state.setAddSourceOpen);
 
   const { data: sources, isLoading, error } = useSources(workspaceId, filters);
   const deleteSource = useDeleteSource(workspaceId);
   const bulkDelete = useBulkDeleteSources(workspaceId);
-  const reprocessFailed = useReprocessSources(workspaceId);
+  const reprocess = useReprocessSources(workspaceId);
 
   const failedCount =
     sources?.filter((source) => source.status === "FAILED").length ?? 0;
@@ -101,41 +96,40 @@ export function SourceLibrary({ workspaceId }: SourceLibraryProps) {
 
   const hasActiveFilters = activeFilterCount > 0;
 
-  function clearFilters() {
-    setFilters({});
-  }
-
   function exitSelectionMode() {
     setSelectionMode(false);
     setSelectedIds([]);
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6 md:p-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-1">
-          <h2 className="font-heading text-2xl font-semibold tracking-tight">
-            Source library
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            {sources
-              ? `${sources.length} source${sources.length === 1 ? "" : "s"} in this workspace`
-              : "All knowledge sources in this workspace"}
-          </p>
-        </div>
-        <Button onClick={() => setAddOpen(true)} className="shrink-0">
-          <PlusIcon />
-          Add source
-        </Button>
-      </div>
+    <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 p-4 md:p-8">
+      <PageHeader
+        title="Sources"
+        description={
+          sources
+            ? `${sources.length} ${sources.length === 1 ? "source" : "sources"}${hasActiveFilters ? " match your filters" : " in this notebook"}`
+            : "Everything this notebook can cite"
+        }
+        actions={
+          <Button onClick={() => setAddSourceOpen(true)}>
+            <PlusIcon />
+            Add source
+          </Button>
+        }
+      />
 
       <div className="space-y-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
           <div className="relative min-w-0 flex-1">
-            <SearchIcon className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <SearchIcon
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+            />
             <Input
-              className="rounded-full bg-background pl-9"
-              placeholder="Search sources..."
+              type="search"
+              className="h-9 rounded-full pl-9"
+              placeholder="Search sources"
+              aria-label="Search sources"
               value={filters.q ?? ""}
               onChange={(event) =>
                 setFilters((current) => ({
@@ -149,6 +143,13 @@ export function SourceLibrary({ workspaceId }: SourceLibraryProps) {
           <div className="flex flex-wrap items-center gap-2">
             <Select
               value={filters.type ?? "all"}
+              items={[
+                { value: "all", label: "All types" },
+                ...SOURCE_TYPES.map((type) => ({
+                  value: type,
+                  label: SOURCE_TYPE_LABELS[type],
+                })),
+              ]}
               onValueChange={(value) =>
                 setFilters((current) => ({
                   ...current,
@@ -156,7 +157,10 @@ export function SourceLibrary({ workspaceId }: SourceLibraryProps) {
                 }))
               }
             >
-              <SelectTrigger className="w-[130px] rounded-full">
+              <SelectTrigger
+                aria-label="Filter by type"
+                className="h-9 w-[8.5rem] rounded-full"
+              >
                 <SelectValue placeholder="Type" />
               </SelectTrigger>
               <SelectContent>
@@ -171,6 +175,13 @@ export function SourceLibrary({ workspaceId }: SourceLibraryProps) {
 
             <Select
               value={filters.status ?? "all"}
+              items={[
+                { value: "all", label: "All statuses" },
+                ...SOURCE_STATUSES.map((status) => ({
+                  value: status,
+                  label: SOURCE_STATUS_LABELS[status],
+                })),
+              ]}
               onValueChange={(value) =>
                 setFilters((current) => ({
                   ...current,
@@ -178,7 +189,10 @@ export function SourceLibrary({ workspaceId }: SourceLibraryProps) {
                 }))
               }
             >
-              <SelectTrigger className="w-[130px] rounded-full">
+              <SelectTrigger
+                aria-label="Filter by status"
+                className="h-9 w-[8.5rem] rounded-full"
+              >
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
@@ -191,11 +205,16 @@ export function SourceLibrary({ workspaceId }: SourceLibraryProps) {
               </SelectContent>
             </Select>
 
-            <div className="flex items-center rounded-full border bg-background p-0.5">
+            <div
+              role="group"
+              aria-label="Layout"
+              className="flex items-center rounded-full border p-0.5"
+            >
               <Button
                 variant={view === "grid" ? "secondary" : "ghost"}
                 size="icon-sm"
                 className="rounded-full"
+                aria-pressed={view === "grid"}
                 onClick={() => setView("grid")}
               >
                 <LayoutGridIcon />
@@ -205,6 +224,7 @@ export function SourceLibrary({ workspaceId }: SourceLibraryProps) {
                 variant={view === "list" ? "secondary" : "ghost"}
                 size="icon-sm"
                 className="rounded-full"
+                aria-pressed={view === "list"}
                 onClick={() => setView("list")}
               >
                 <ListIcon />
@@ -212,62 +232,46 @@ export function SourceLibrary({ workspaceId }: SourceLibraryProps) {
               </Button>
             </div>
 
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    variant="outline"
-                    size="icon-sm"
-                    className="rounded-full"
-                  />
-                }
+            <Button
+              variant={selectionMode ? "secondary" : "outline"}
+              size="sm"
+              className="h-9 rounded-full"
+              aria-pressed={selectionMode}
+              onClick={() =>
+                selectionMode ? exitSelectionMode() : setSelectionMode(true)
+              }
+            >
+              <CheckSquareIcon />
+              Select
+            </Button>
+
+            {failedCount > 0 ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 rounded-full"
+                disabled={reprocess.isPending}
+                onClick={() => reprocess.mutate(undefined)}
               >
-                <MoreHorizontalIcon />
-                <span className="sr-only">More actions</span>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  onClick={() => {
-                    if (selectionMode) {
-                      exitSelectionMode();
-                      return;
-                    }
-                    setSelectionMode(true);
-                  }}
-                >
-                  {selectionMode ? "Cancel selection" : "Select sources"}
-                </DropdownMenuItem>
-                {failedCount > 0 ? (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      disabled={reprocessFailed.isPending}
-                      onClick={() =>
-                        void reprocessFailed.mutateAsync(undefined)
-                      }
-                    >
-                      <RefreshCwIcon />
-                      Reprocess failed ({failedCount})
-                    </DropdownMenuItem>
-                  </>
-                ) : null}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                {reprocess.isPending ? <Spinner /> : <RefreshCwIcon />}
+                Retry {failedCount} failed
+              </Button>
+            ) : null}
           </div>
         </div>
 
         {hasActiveFilters ? (
           <div className="flex items-center gap-2 text-sm">
             <span className="text-muted-foreground">
-              {activeFilterCount} filter
-              {activeFilterCount === 1 ? "" : "s"} applied
+              {activeFilterCount}{" "}
+              {activeFilterCount === 1 ? "filter" : "filters"} applied
             </span>
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              className="h-7 px-2 text-muted-foreground"
-              onClick={clearFilters}
+              className="text-muted-foreground"
+              onClick={() => setFilters({})}
             >
               <XIcon />
               Clear
@@ -276,30 +280,41 @@ export function SourceLibrary({ workspaceId }: SourceLibraryProps) {
         ) : null}
 
         {selectionMode ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-muted/30 px-4 py-3">
-            <p className="text-sm text-muted-foreground">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-muted/40 px-4 py-2.5">
+            <p className="text-sm text-muted-foreground" aria-live="polite">
               {selectedIds.length > 0
                 ? `${selectedIds.length} selected`
-                : "Select sources to bulk delete"}
+                : "Choose the sources to delete"}
             </p>
             <div className="flex items-center gap-2">
-              {selectedIds.length > 0 ? (
+              {sources && sources.length > 0 ? (
                 <Button
                   size="sm"
-                  variant="destructive"
-                  disabled={bulkDelete.isPending}
-                  onClick={() => {
-                    void bulkDelete
-                      .mutateAsync(selectedIds)
-                      .then(exitSelectionMode);
-                  }}
+                  variant="ghost"
+                  onClick={() =>
+                    setSelectedIds(
+                      selectedIds.length === sources.length
+                        ? []
+                        : sources.map((source) => source.id),
+                    )
+                  }
                 >
-                  <Trash2Icon />
-                  Delete selected
+                  {selectedIds.length === sources.length
+                    ? "Clear selection"
+                    : "Select all"}
                 </Button>
               ) : null}
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled={selectedIds.length === 0 || bulkDelete.isPending}
+                onClick={() => setConfirmBulkDelete(true)}
+              >
+                <Trash2Icon />
+                Delete
+              </Button>
               <Button size="sm" variant="outline" onClick={exitSelectionMode}>
-                Cancel
+                Done
               </Button>
             </div>
           </div>
@@ -308,95 +323,92 @@ export function SourceLibrary({ workspaceId }: SourceLibraryProps) {
 
       {isLoading ? (
         <div
+          aria-busy="true"
+          aria-label="Loading sources"
           className={cn(
             "grid gap-4",
-            view === "grid" ? "sm:grid-cols-2 xl:grid-cols-3" : "",
+            view === "grid" && "sm:grid-cols-2 xl:grid-cols-3",
           )}
         >
           {Array.from({ length: 6 }).map((_, index) => (
             <Skeleton
               key={index}
-              className={cn("rounded-3xl", view === "grid" ? "h-40" : "h-24")}
+              className={cn("rounded-xl", view === "grid" ? "h-40" : "h-20")}
             />
           ))}
         </div>
-      ) : error ? (
-        <Empty className="rounded-3xl border bg-card/50">
+      ) : error && !sources ? (
+        <Empty className="border">
           <EmptyHeader>
             <EmptyTitle>Could not load sources</EmptyTitle>
             <EmptyDescription>
-              {error instanceof ApiError ? error.message : "Please try again."}
+              {getErrorMessage(error, "Check your connection and try again.")}
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : sources && sources.length > 0 ? (
-        <div
+        <ul
           className={cn(
-            "grid gap-4",
+            "grid gap-3",
             view === "grid" ? "sm:grid-cols-2 xl:grid-cols-3" : "grid-cols-1",
           )}
         >
           {sources.map((source) => (
-            <div key={source.id} className="relative">
+            <li key={source.id} className="flex items-start gap-3">
               {selectionMode ? (
-                <div className="absolute top-4 left-4 z-10">
-                  <Checkbox
-                    checked={selectedIds.includes(source.id)}
-                    onCheckedChange={(checked) => {
-                      setSelectedIds((current) =>
-                        checked
-                          ? [...current, source.id]
-                          : current.filter((id) => id !== source.id),
-                      );
-                    }}
-                  />
-                </div>
+                <Checkbox
+                  className="mt-5"
+                  aria-label={`Select ${source.title}`}
+                  checked={selectedIds.includes(source.id)}
+                  onCheckedChange={(checked) =>
+                    setSelectedIds((current) =>
+                      checked
+                        ? [...current, source.id]
+                        : current.filter((id) => id !== source.id),
+                    )
+                  }
+                />
               ) : null}
               <SourceCard
                 source={source}
+                layout={view}
+                className="min-w-0 flex-1 self-stretch"
                 onDelete={setDeletingSource}
                 onReprocess={
                   source.status === "FAILED"
-                    ? (target) => void reprocessFailed.mutateAsync([target.id])
+                    ? (target) => reprocess.mutate([target.id])
                     : undefined
                 }
-                className={selectionMode ? "pl-10" : undefined}
               />
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       ) : (
-        <Empty className="rounded-3xl border border-dashed bg-muted/20 py-16">
+        <Empty className="border border-dashed py-16">
           <EmptyHeader>
-            <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-2xl bg-muted">
-              <BookOpenIcon className="size-5 text-muted-foreground" />
-            </div>
-            <EmptyTitle>No sources found</EmptyTitle>
+            <EmptyTitle>
+              {hasActiveFilters ? "No source matches" : "No sources yet"}
+            </EmptyTitle>
             <EmptyDescription>
               {hasActiveFilters
-                ? "Try adjusting your search or filters."
-                : "Add your first source to start building this notebook."}
+                ? "Try a different search, or clear the filters."
+                : "Add a PDF, a web page, a YouTube video, or some text. Chat and study tools will use it."}
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent className="flex flex-wrap justify-center gap-2">
             {hasActiveFilters ? (
-              <Button variant="outline" onClick={clearFilters}>
+              <Button variant="outline" onClick={() => setFilters({})}>
                 Clear filters
               </Button>
-            ) : null}
-            <Button onClick={() => setAddOpen(true)}>
-              <PlusIcon />
-              Add source
-            </Button>
+            ) : (
+              <Button onClick={() => setAddSourceOpen(true)}>
+                <PlusIcon />
+                Add a source
+              </Button>
+            )}
           </EmptyContent>
         </Empty>
       )}
-
-      <AddSourceDialog
-        workspaceId={workspaceId}
-        open={addOpen}
-        onOpenChange={setAddOpen}
-      />
 
       <AlertDialog
         open={Boolean(deletingSource)}
@@ -408,13 +420,13 @@ export function SourceLibrary({ workspaceId }: SourceLibraryProps) {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete source?</AlertDialogTitle>
+            <AlertDialogTitle>Delete this source?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete{" "}
               <span className="font-medium text-foreground">
                 {deletingSource?.title}
-              </span>
-              .
+              </span>{" "}
+              will be removed from this notebook, and answers will stop citing
+              it. This can&apos;t be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -429,12 +441,48 @@ export function SourceLibrary({ workspaceId }: SourceLibraryProps) {
                 if (!deletingSource) {
                   return;
                 }
-                void deleteSource
-                  .mutateAsync(deletingSource.id)
-                  .then(() => setDeletingSource(null));
+                deleteSource.mutate(deletingSource.id, {
+                  onSuccess: () => setDeletingSource(null),
+                });
               }}
             >
               {deleteSource.isPending ? <Spinner /> : null}
+              Delete source
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmBulkDelete} onOpenChange={setConfirmBulkDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete {selectedIds.length}{" "}
+              {selectedIds.length === 1 ? "source" : "sources"}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              They will be removed from this notebook, and answers will stop
+              citing them. This can&apos;t be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkDelete.isPending}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={bulkDelete.isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                bulkDelete.mutate(selectedIds, {
+                  onSuccess: () => {
+                    setConfirmBulkDelete(false);
+                    exitSelectionMode();
+                  },
+                });
+              }}
+            >
+              {bulkDelete.isPending ? <Spinner /> : null}
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

@@ -105,9 +105,9 @@ Each client feature follows `components/`, `hooks/`, `lib/{api,types,routes,cons
 Tokens live in `client/app/globals.css` (`:root` / `.dark` + `@theme inline`). There is **no** `tailwind.config.ts`.
 
 - **Never** hardcode hex / oklch / rgb values, and **never** use raw Tailwind palette classes (`bg-purple-500`, `text-gray-600`). Use semantic utilities: `bg-background`, `text-foreground`, `bg-primary`, `border-border`, etc.
-- Base color family is **stone**; the brand accent is a lime-green `--primary`.
-- Body text is **JetBrains Mono** (`font-mono` on `<html>`). Apply `font-heading` (Figtree) on titles.
-- Prefer large radii (`rounded-2xl` / `rounded-3xl` / `rounded-full`) to match existing cards, dialogs, and pill controls.
+- The neutral ramp is warm grey; the brand accent is an amber `--primary` (use `text-primary-ink` for amber text); dark is the default theme.
+- Text is **Manrope** (`font-sans`; `font-heading` is the same family and marks titles). JetBrains Mono (`font-mono`) is for data only.
+- Radii: `rounded-lg` controls, `rounded-xl` cards, `rounded-2xl` dialogs, `rounded-full` pills. Nothing larger.
 - Primitives are **`@base-ui/react`**, not Radix. Polymorphic rendering uses a `render` prop (and `nativeButton={false}` on `Button`), not `asChild`.
 - Icons are `lucide-react` only.
 

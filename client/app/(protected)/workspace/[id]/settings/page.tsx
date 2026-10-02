@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireAuth } from "@/features/auth";
 import { getWorkspaceOrNull } from "@/features/workspaces/lib/workspace-server";
-import { WorkspaceShell } from "@/features/workspaces";
 import { WorkspaceSettingsForm } from "@/features/workspaces/components/workspace-settings-form";
 
 type WorkspaceSettingsPageProps = {
@@ -19,9 +18,5 @@ export default async function WorkspaceSettingsPage({
     notFound();
   }
 
-  return (
-    <WorkspaceShell workspace={workspace}>
-      <WorkspaceSettingsForm workspace={workspace} />
-    </WorkspaceShell>
-  );
+  return <WorkspaceSettingsForm workspace={workspace} />;
 }

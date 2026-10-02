@@ -15,7 +15,7 @@ Living inventory of UI in this project. Read this before building any new compon
 
 ## Base Primitives (`client/components/ui/`)
 
-Generated shadcn/ui components (style `base-rhea`, built on `@base-ui/react`, icons from `lucide-react`). These are regenerable via the shadcn CLI — prefer using/extending them over writing new low-level primitives.
+Generated shadcn/ui components, retuned to the amber/Manrope identity (radius, borders instead of rings, focus rings) (style `base-rhea`, built on `@base-ui/react`, icons from `lucide-react`). These are regenerable via the shadcn CLI — prefer using/extending them over writing new low-level primitives.
 
 | Component | File | Notes |
 | --- | --- | --- |
@@ -32,14 +32,13 @@ Generated shadcn/ui components (style `base-rhea`, built on `@base-ui/react`, ic
 | ButtonGroup | `button-group.tsx` | Grouped buttons with shared border radius |
 | Calendar | `calendar.tsx` | Date picker grid (`react-day-picker`) |
 | Card | `card.tsx` | `Card`/`CardHeader`/`CardTitle`/`CardDescription`/`CardContent` |
-| Carousel | `carousel.tsx` | `embla-carousel-react` wrapper |
 | Chart | `chart.tsx` | `recharts` theming wrapper |
 | Checkbox | `checkbox.tsx` | Used for bulk-select in Source Library |
 | Collapsible | `collapsible.tsx` | Generic expand/collapse |
 | Combobox | `combobox.tsx` | Searchable select (`cmdk`-based) |
 | Command | `command.tsx` | Command palette primitives (`cmdk`) |
 | ContextMenu | `context-menu.tsx` | Right-click menu |
-| Dialog | `dialog.tsx` | `Dialog`/`DialogContent`/`DialogHeader`/`DialogTitle`/`DialogDescription`/`DialogFooter` — used for all "add/create/generate/edit" modals |
+| Dialog | `dialog.tsx` | `Dialog`/`DialogContent`/`DialogHeader`/`DialogTitle`/`DialogDescription`/`DialogFooter`; `rounded-2xl`, scrolls inside `100dvh - 2rem`. Form dialogs put the form in an inner component mounted per open |
 | Direction | `direction.tsx` | RTL/LTR direction provider |
 | Drawer | `drawer.tsx` | Bottom/side sheet on mobile |
 | DropdownMenu | `dropdown-menu.tsx` | `DropdownMenu`/`Trigger`/`Content`/`Item`/`Separator` |
@@ -56,7 +55,6 @@ Generated shadcn/ui components (style `base-rhea`, built on `@base-ui/react`, ic
 | Menubar | `menubar.tsx` | Desktop-style menu bar |
 | Message | `message.tsx` | `Message`/`MessageAvatar`/`MessageContent`/`MessageFooter`/`MessageGroup` — chat message layout |
 | MessageScroller | `message-scroller.tsx` | Auto-scrolling chat viewport with scroll-to-bottom button |
-| ModeToggle | `mode-toggle.tsx` | Light/dark theme toggle (`next-themes`) |
 | NativeSelect | `native-select.tsx` | Native `<select>` styled to match `Select` |
 | NavigationMenu | `navigation-menu.tsx` | Top-level nav menu (not currently used in app routes) |
 | Pagination | `pagination.tsx` | Page number controls |
@@ -76,7 +74,7 @@ Generated shadcn/ui components (style `base-rhea`, built on `@base-ui/react`, ic
 | Table | `table.tsx` | Data table primitives |
 | Tabs | `tabs.tsx` | `Tabs`/`TabsList`/`TabsTrigger`/`TabsContent` — used in `AddSourceDialog` |
 | Textarea | `textarea.tsx` | Multi-line text input |
-| Toast | `toast.tsx` | Toast primitive (present but not currently wired to a global toaster/provider — verify before relying on it) |
+| Toast | `toast.tsx` | Base UI toast. `Toaster` is mounted in `app/layout.tsx`; call `toast.add({ title, description, type })` |
 | Toggle | `toggle.tsx` | Single toggle button |
 | ToggleGroup | `toggle-group.tsx` | Grouped toggle buttons |
 | Tooltip | `tooltip.tsx` | Hover tooltip |
@@ -87,153 +85,163 @@ Generated shadcn/ui components (style `base-rhea`, built on `@base-ui/react`, ic
 
 ## Feature Components
 
+### `shared/components/`
+| Component | Description |
+| --- | --- |
+| `BrandMark` (`brand-mark.tsx`) | The SourceLab mark (amber tile, three text lines, a citation dot) with optional wordmark. `size` sm/md/lg. Replaces every emoji logo |
+| `PageHeader` (`page-header.tsx`) | The `h1`, description, and right-hand actions row at the top of a workspace page |
+| `ShortcutsDialog` (`shortcuts-dialog.tsx`) | `?` dialog listing the keyboard shortcuts. Open state in `ui-store` |
+| `CitedAnswerPreview` (`cited-answer-preview.tsx`) | Static, decorative example of a cited answer with source chips (landing hero, sign-in panel) |
+| `StreamdownContent` (`streamdown-content.tsx`) | Markdown renderer used for streamed text and artifact bodies |
+
+State and hooks: `shared/stores/ui-store.ts` (command palette, shortcuts dialog, create-notebook dialog, add-source dialog, sources panel/sheet; only the desktop panel flag is persisted), `shared/hooks/use-keyboard-shortcuts.ts` (`useKeyboardShortcuts`, `useModKeyLabel`), `shared/hooks/use-mobile.ts`, `shared/hooks/use-debounced-value.ts`.
+
 ### `features/auth/components/`
 | Component | Description |
 | --- | --- |
-| `LoginForm` (`login-form.tsx`) | Card with Google OAuth plus email/password fields (`Label` + `Input`), inline error, links to signup and forgot-password |
-| `SignupForm` (`signup-form.tsx`) | Same card pattern; name/email/password/confirm; Google; post-submit “check your email” state |
+| `LoginForm` (`login-form.tsx`) | Card with Google OAuth plus email/password fields, inline `role="alert"` error, links to signup and forgot-password |
+| `SignupForm` (`signup-form.tsx`) | Same card pattern; name/email/password/confirm; Google; post-submit "check your email" state |
 | `ForgotPasswordForm` (`forgot-password-form.tsx`) | Email field + generic success copy (does not leak whether the account exists) |
 | `ResetPasswordForm` (`reset-password-form.tsx`) | New password + confirm; reads `token` from the query string |
-| `SignOutButton` (`sign-out-button.tsx`) | Button that calls `signOut` and redirects to login |
+| `UserMenu` (`user-menu.tsx`) | Avatar dropdown: account name, Billing, Memory, Keyboard shortcuts, Light/Dark/System theme, Sign out. The only place the theme and sign-out live in the app |
 | `GoogleIcon` (`google-icon.tsx`) | Brand SVG for Google buttons (hardcoded hex fills are a logo exception) |
+
+Hook: `useSignOut` (`hooks/use-sign-out.ts`). `app/(auth)/layout.tsx` is a split layout: a forced-dark brand panel with `CitedAnswerPreview` beside the form.
 
 ### `features/workspaces/components/`
 | Component | Description |
 | --- | --- |
-| `DashboardHome` (`dashboard-home.tsx`) | Full dashboard page: sticky header (logo, Memory link, theme toggle, sign out), hero + 3-up feature blurb, searchable workspace grid, wires create/edit/delete dialogs |
-| `WorkspaceCard` (`workspace-card.tsx`) | Single workspace tile in the dashboard grid with edit/delete actions |
-| `CreateWorkspaceCard` (`create-workspace-card.tsx`) | Dashed "create new" tile shown first in the workspace grid |
-| `WorkspaceList` (`workspace-list.tsx`) | Alternate/simple list rendering of workspaces (used where the full dashboard grid isn't needed) |
-| `WorkspaceFormDialog` (`workspace-form-dialog.tsx`) | Shared create/edit dialog for title, description, icon, default model |
-| `DeleteWorkspaceDialog` (`delete-workspace-dialog.tsx`) | Confirmation `AlertDialog` for deleting a workspace, warns about cascading data loss |
-| `WorkspaceShell` (`workspace-shell.tsx`) | Sidebar + inset layout wrapping every `/workspace/[id]/*` page — sidebar nav (Chat/Learn/Sources/Settings), embedded `SourceSidebarList`, header with Add Source + `WorkspaceHeaderActions` + sign out |
-| `WorkspaceHeaderActions` (`workspace-header-actions.tsx`) | Header-area actions/menu for the active workspace (e.g. quick settings access) |
-| `WorkspaceSettingsForm` (`workspace-settings-form.tsx`) | Workspace settings page: title/description/icon/default model fields, danger-zone delete |
+| `DashboardHome` (`dashboard-home.tsx`) | Dashboard: `AppHeader`, greeting, stat strip (notebooks, credits, plan), searchable notebook grid, create/edit/delete dialogs, toasts |
+| `AppHeader` (`app-header.tsx`) | Top bar outside a notebook: brand, search trigger (Cmd/Ctrl+K), `CreditsBadge`, `UserMenu` |
+| `AccountShell` (`account-shell.tsx`) | Frame for billing and memory: `AppHeader`, back link, `PageHeader`, content |
+| `WorkspaceCard` (`workspace-card.tsx`) | Notebook tile: icon tile, title (stretched link), description, updated-at footer with arrow nudge, edit/delete menu |
+| `CreateWorkspaceCard` (`create-workspace-card.tsx`) | Dashed "New notebook" tile |
+| `WorkspaceFormDialog` (`workspace-form-dialog.tsx`) | Create/edit dialog (title, description, icon radiogroup). The form body is an inner component mounted per open |
+| `DeleteWorkspaceDialog` (`delete-workspace-dialog.tsx`) | `AlertDialog` that names what is lost |
+| `WorkspaceShell` (`workspace-shell.tsx`) | Sidebar + inset frame for `/workspace/[id]/*`: header (title, search, model picker, credits, sources toggle, `UserMenu`), right sources panel / sheet, add-source dialog, `AppOverlays`. Mounted by the route layout |
+| `WorkspaceSidebar` (`workspace-sidebar.tsx`) | Recessed sidebar: brand, notebook nav (Chat, Learn, Sources, Settings) with the amber active tick, `WorkspaceSwitcher`, "All notebooks" |
+| `WorkspaceSwitcher` (`workspace-switcher.tsx`) | Searchable notebook list in the sidebar; "+" opens the create dialog |
+| `WorkspaceHeaderActions` (`workspace-header-actions.tsx`) | Per-notebook chat model picker |
+| `WorkspaceSettingsForm` (`workspace-settings-form.tsx`) | Settings page: fields, dirty-aware save, danger zone |
+| `CommandPalette` (`command-palette.tsx`) | `cmdk` palette: notebooks, this notebook's sources, navigation, account, theme |
+| `AppOverlays` (`app-overlays.tsx`) | Mounts the palette and shortcuts dialog and registers the shortcuts once per shell |
 
 ### `features/sources/components/`
 | Component | Description |
 | --- | --- |
-| `SourceLibrary` (`source-library.tsx`) | Full source library page: search, type/status filters, grid/list toggle, bulk-select + bulk delete, reprocess-failed action, empty/loading/error states |
-| `SourceCard` (`source-card.tsx`) | Grid/list tile for one source — type icon, title, relative date, status badge, content preview snippet, reprocess/delete dropdown |
-| `SourceDetail` (`source-detail.tsx`) | Source detail page — header with type/status, original URL or PDF link, processing/failed/empty states, markdown content preview |
-| `SourceSidebarList` (`source-sidebar-list.tsx`) | Compact source list rendered inside `WorkspaceShell`'s sidebar, with an "add source" affordance |
-| `AddSourceDialog` (`add-source-dialog.tsx`) | Tabbed dialog (Text / Markdown / PDF / Website / YouTube) for creating a source, redirects to the new source's detail page on success |
-| `SourceStatusBadge` (`source-status-badge.tsx`) | Small badge mapping `SourceStatus` → label/color |
-| `SourceTypeIcon` (`source-type-icon.tsx`) | Maps `SourceType` → a `lucide-react` icon |
-| `MarkdownPreview` (`markdown-preview.tsx`) | Renders a source's extracted text/markdown content |
+| `SourceLibrary` (`source-library.tsx`) | Sources page: `PageHeader`, pill filters, grid/list toggle, select mode with bulk delete (confirmed), "Retry n failed" |
+| `SourceCard` (`source-card.tsx`) | Source tile (grid or list `layout`): type tile, title (stretched link), preview, status badge, actions menu |
+| `SourceDetail` (`source-detail.tsx`) | Source page: status, link or PDF, processing/failed (with Try again)/empty states, Markdown preview |
+| `SourcesPanel` (`sources-panel.tsx`) | Compact `w-80` source list beside chat and learn (rows, indexing/failed state, add button, library link) |
+| `AddSourceDialog` (`add-source-dialog.tsx`) | Tabbed dialog (Text / Markdown / PDF / Website / YouTube). One `<form>` per tab so Enter submits; stays on the page and toasts with an "Open" action |
+| `SourceStatusBadge` (`source-status-badge.tsx`) | Status to icon + label: pending (clock), processing (spinner), ready (check, amber tint), failed (alert, destructive) |
+| `SourceTypeIcon` (`source-type-icon.tsx`) | Maps `SourceType` to a `lucide-react` icon |
+| `MarkdownPreview` (`markdown-preview.tsx`) | Renders a source's extracted text |
 
 ### `features/chat/components/`
 | Component | Description |
 | --- | --- |
-| `WorkspaceChat` (`workspace-chat.tsx`) | Main chat page: conversation switcher, new/export/delete conversation actions, streamed message list (`MessageScroller`), citation-aware message rendering, composer |
-| `ChatComposer` (`chat-composer.tsx`) | Message textarea + send button + web-search toggle; submits on Enter (Shift+Enter for newline) |
-| `ChatMessageBody` (`chat-message-body.tsx`) | Renders an assistant message's markdown text and inlines numbered `CitationMarker`s at cited positions |
-| `CitationMarker` (`citation-marker.tsx`) | Small pill button (`[1]`, `[2]`, …) inline in assistant text; hover reveals a `CitationPreview` |
-| `CitationPreview` (`citation-preview.tsx`) | Hover card body showing a citation's source title, excerpt, and a link to the source or URL |
-| `CitationSources` (`citation-sources.tsx`) | Row of unique source `Attachment` chips below an assistant message. Chips are limited to citations still marked in the answer. Older messages with no flag still show every saved source. Each chip has a hover preview and a link to the source detail page or external URL |
-| `RagTracePanel` (`rag-trace-panel.tsx`) | Pipeline steps above an assistant reply. Each completed step expands to the values from that step (rewrite, HyDE, retrieval, CRAG, context, output PII, grounding, citations, coverage, policy, and sensitive data). |
+| `WorkspaceChat` (`workspace-chat.tsx`) | Chat page: conversation switcher, new/export/delete (confirmed) actions, message list, "Searching your sources" wait state, composer. Guardrail-blocked messages come back through `InputBlockedError` and `useChat`'s `onError` |
+| `ChatComposer` (`chat-composer.tsx`) | Auto-growing textarea in a focus-ring box, web-search toggle, send button, shortcut hints. Carries `data-chat-input` for Cmd/Ctrl+/ |
+| `ChatEmptyState` (`chat-empty-state.tsx`) | Empty thread: no sources gives an "Add your first source" action; otherwise starter prompt chips |
+| `SourceStatusBanner` (`source-status-banner.tsx`) | Non-blocking strip above the composer for indexing or failed sources |
+| `ChatMessageBody` (`chat-message-body.tsx`) | Assistant Markdown with inline `CitationMarker`s |
+| `CitationMarker` (`citation-marker.tsx`) | Mono amber chip (`[1]`) with a hover `CitationPreview` |
+| `CitationPreview` (`citation-preview.tsx`) | Hover card: source, excerpt, open link, "Save to library" for web results (with toast) |
+| `CitationSources` (`citation-sources.tsx`) | Unique source chips under an assistant reply |
+| `RagTracePanel` (`rag-trace-panel.tsx`) | "How this answer was found" accordion above the reply, with expandable steps |
 
 ### `features/learn/components/`
 | Component | Description |
 | --- | --- |
-| `LearnHub` (`learn-hub.tsx`) | Learning tools page: artifact grid with type/status badges, delete, and the generate dialog |
-| `GenerateArtifactDialog` (`generate-artifact-dialog.tsx`) | Dialog to pick an artifact type (with description) and optional custom title, then enqueue background generation |
-| `ArtifactDetail` (`artifact-detail.tsx`) | Artifact detail page shell — loads one artifact and renders `ArtifactContentViewer` based on status/type |
-| `ArtifactContentViewer` (`artifact-content-viewer.tsx`) | Dispatches an artifact's `content` JSON to the correct type-specific viewer |
-| `ArtifactStatusBadge` / `ArtifactTypeBadge` (`artifact-status-badge.tsx`) | Badges mapping `ArtifactStatus`/`ArtifactType` → label |
-| `viewers/SummaryViewer` (`summary-viewer.tsx`) | Renders `{ markdown }` via the shared markdown renderer |
-| `viewers/TakeawaysViewer` (`takeaways-viewer.tsx`) | Renders `{ items: string[] }` as a bullet list |
-| `viewers/FlashcardsViewer` (`flashcards-viewer.tsx`) | Renders `{ cards: { front, back }[] }` as flip/reveal cards |
-| `viewers/QuizViewer` (`quiz-viewer.tsx`) | Renders `{ questions: { question, options, correctIndex, explanation }[] }` as an interactive multiple-choice quiz |
-| `viewers/MindmapViewer` (`mindmap-viewer.tsx`) | Renders `{ nodes, edges }` as an interactive `@xyflow/react` tree (auto tree-layout, expand/collapse, minimap, "ask in chat" on selected node, full-screen toggle) |
-| `viewers/ReportViewer` (`report-viewer.tsx`) | Renders `{ markdown, sections: { title, content }[] }` as a structured long-form report |
+| `LearnHub` (`learn-hub.tsx`) | Study tools page: artifact tiles with type icon + status, confirmed delete, generate dialog |
+| `GenerateArtifactDialog` (`generate-artifact-dialog.tsx`) | Format radiogroup, optional title, "Uses 1 credit". Inner form mounted per open |
+| `ArtifactDetail` (`artifact-detail.tsx`) | Artifact page: loading, not found, failed, generating, and viewer states |
+| `ArtifactContentViewer` (`artifact-content-viewer.tsx`) | Dispatches to the viewer; wraps in `MotionConfig reducedMotion="user"` and remounts on regeneration |
+| `ArtifactTypeIcon` / `ArtifactStatusBadge` / `ArtifactTypeBadge` | Icon per type; status badge with icon; type label badge |
+| `viewers/*` | Summary, takeaways, flashcards (flip cards), quiz, mind map (`@xyflow/react`), report |
 
 ### `features/memory/components/`
 | Component | Description |
 | --- | --- |
-| `MemorySettings` (`memory-settings.tsx`) | `/settings/memory` page — lists memories with source (Manual/Learned) and category badges, add/edit/delete |
-| `MemoryFormDialog` (`memory-form-dialog.tsx`) | Create/edit dialog for a single memory's text |
+| `MemorySettings` (`memory-settings.tsx`) | `/settings/memory` in `AccountShell`: memory list with "Added by you" / "Learned" badges, add/edit, confirmed delete |
+| `MemoryFormDialog` (`memory-form-dialog.tsx`) | Create/edit dialog; inner form mounted per open |
 
 ### `features/billing/components/`
 | Component | Description |
 | --- | --- |
-| `BillingSettings` (`billing-settings.tsx`) | `/settings/billing` — same settings shell as Memory (`max-w-3xl`, back to dashboard); plan `Badge`, remaining credits, Upgrade / Manage billing |
-| `PricingPage` (`pricing-page.tsx`) | Public `/pricing` — two `Card`s (`rounded-3xl`); Pro uses `border-primary`; Free vs Pro CTAs |
-| `CreditsBadge` (`credits-badge.tsx`) | Outline `Button` `rounded-full` linking to billing; shows remaining credits |
+| `BillingSettings` (`billing-settings.tsx`) | `/settings/billing` in `AccountShell`: plan badge, credits left, Upgrade / Manage billing / Compare plans |
+| `PricingPage` (`pricing-page.tsx`) | Two plan `Card`s. Standalone `/pricing` adds a slim header; `embedded` is the landing section |
+| `CreditsBadge` (`credits-badge.tsx`) | Outline pill linking to billing with remaining credits |
 
-### CreditsBadge
+### `features/landing/components/`
+| Component | Description |
+| --- | --- |
+| `LandingPage` (`landing-page.tsx`) | Signed-out `/`: one `dark landing-page` wrapper (always dark) around nav, hero, bands, pricing, footer |
+| `LandingNav` (`landing-nav.tsx`) | Fixed bar with scroll blur, `BrandMark`, section links, mobile `Sheet`, Sign in / Create a notebook |
+| `LandingHero` (`landing-hero.tsx`) | Title, lede, actions, and the `CitedAnswerPreview` |
+| `LandingFeatures`, `LandingStudy`, `LandingUseCases`, `LandingHowItWorks` | Content bands |
+| `LandingFooter`, `LandingSectionHeader` | Footer and the centred section heading |
 
-File: `client/features/billing/components/credits-badge.tsx`
-Last updated: 2026-08-29
+---
+
+## Pattern Notes
+
+### Notebook, source, and artifact cards
+
+Files: `workspace-card.tsx`, `source-card.tsx`, `learn-hub.tsx`
+Last updated: 2026-10-02
 
 | Property | Class |
 | --- | --- |
-| Background | Button `variant="outline"` |
-| Border radius | `rounded-full` |
-| Text — primary | default button text |
-| Spacing | Button `size="sm"` |
-| Hover state | outline button hover |
+| Background | `bg-card` |
+| Border | `border`, hover `hover:border-primary/40` |
+| Border radius | `rounded-xl` |
+| Text | title `font-heading text-sm|base font-semibold`, meta `text-xs text-muted-foreground` |
+| Spacing | `p-4`, footer `border-t pt-3` |
+| Hover state | border shifts toward amber; `ArrowUpRight` nudges `-translate-y-0.5 translate-x-0.5` |
 | Shadow | none |
-| Accent usage | none |
+| Accent usage | amber only on the hover border and the arrow (`text-primary-ink`) |
 
-**Pattern notes:** Pill control like source-library filters. Links to `/settings/billing`. Do not use a `Progress` bar — after a Pro downgrade remaining credits can exceed the Free allowance.
+**Pattern notes:** Stretched link on the title (`after:absolute after:inset-0`), actions on `relative z-10`. Icon tile is `size-9|10 rounded-lg border bg-muted`.
 
-### BillingSettings / MemorySettings page shell
+### Composer
 
-File: `client/features/billing/components/billing-settings.tsx`
-Last updated: 2026-08-29
-
-| Property | Class |
-| --- | --- |
-| Background | page `bg` default; content `Card` |
-| Border | `Card` default border |
-| Border radius | card default (`rounded-2xl` / design system) |
-| Text — primary | `font-heading text-2xl font-semibold` on `h1` |
-| Text — secondary | `text-sm text-muted-foreground` |
-| Spacing | `mx-auto max-w-3xl … p-6 md:p-10`, header `gap-8` |
-| Hover state | ghost back button |
-| Shadow | none |
-| Accent usage | plan `Badge` default vs `secondary` |
-
-**Pattern notes:** Match `MemorySettings` — ghost back `Button` + `Link` to dashboard, lucide title icon, `Card` for the main block. Destructive/error copy is `text-sm text-destructive`.
-
-### PricingPage cards
-
-File: `client/features/billing/components/pricing-page.tsx`
-Last updated: 2026-08-29
+File: `chat-composer.tsx`
+Last updated: 2026-10-02
 
 | Property | Class |
 | --- | --- |
-| Background | `Card` |
-| Border | default; featured Pro `border-primary` |
-| Border radius | `rounded-3xl` |
-| Text — primary | `font-heading` title and price |
-| Text — secondary | `CardDescription`, `text-muted-foreground` on `/month` |
-| Spacing | `max-w-5xl`, `p-6 md:p-10`, `gap-6` grid |
-| Hover state | none on the card itself |
-| Shadow | featured `shadow-sm` |
-| Accent usage | `text-primary` on feature check icons; `border-primary` on Pro |
+| Background | `bg-card` box on a `bg-background/90 backdrop-blur-md` footer |
+| Border | `border`, `focus-within:border-primary focus-within:ring-1 focus-within:ring-primary` |
+| Border radius | `rounded-xl` |
+| Spacing | `p-3 sm:p-4`, `max-w-3xl` |
+| Accent usage | focus ring and send button |
 
-**Pattern notes:** Two-up grid of cards, not a table. Check rows use `CheckIcon` + `text-primary`. Do not introduce a third tier card.
+**Pattern notes:** Never disable the box for indexing; use `SourceStatusBanner`. Textarea grows to `max-h-44`.
+
+### Landing and sign-in brand panel
+
+Files: `landing-page.tsx`, `app/(auth)/layout.tsx`
+Last updated: 2026-10-02
+
+The wrapper carries `dark` so every token resolves to the dark set; `.landing-page` in `globals.css` only sets background, colour, and `color-scheme`. Portalled content (the mobile `Sheet`) needs its own `dark` class. Nav links hide below 900px and the sheet carries them. The theme switch is intentionally absent on the landing page.
 
 ### RagTracePanel
 
 File: `client/features/chat/components/rag-trace-panel.tsx`
-Last updated: 2026-09-28
+Last updated: 2026-10-02
 
 | Property | Class |
 | --- | --- |
-| Background | `bg-muted/30` |
+| Background | `bg-muted/30` (accordion) |
 | Border | `border` |
-| Border radius | `rounded-2xl` |
-| Text — primary | `text-sm` on the step label |
-| Text — secondary | `text-sm text-muted-foreground` on the summary; `text-xs text-muted-foreground` on the caption and expanded lines |
-| Spacing | `px-3 py-2` on the panel; `px-1 py-1` on each step; expanded lines `px-7 pb-2` |
-| Hover state | `hover:bg-muted/40` on a step that can expand |
-| Shadow | none |
+| Border radius | `rounded-xl` |
+| Text | trigger `text-xs`; step label `text-sm`; summary `text-sm text-muted-foreground`; expanded lines `text-xs text-muted-foreground` |
+| Hover state | `hover:bg-muted/60` on a step that can expand |
 | Accent usage | `bg-primary` dot on a finished step; `Spinner` on the active step |
 
-**Pattern notes:** Sits above the assistant bubble, not inside it. Finished steps use `Collapsible` and stay closed until opened. Do not put pipeline values into the answer text.
+**Pattern notes:** Sits above the assistant reply, not inside it. Finished steps use `Collapsible`. Do not put pipeline values into the answer text.
 
 ---
 

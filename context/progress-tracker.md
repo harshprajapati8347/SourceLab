@@ -7,7 +7,7 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 ## Current Status
 
 **Phase:** Auth (Google + email/password), workspaces, sources/RAG, chat with query and context intelligence, learning artifacts, memory, billing (Stripe Pro) + credits.
-**Last completed:** Output guardrails — chat holds the model reply, masks PII in the answer and citation excerpts, drops unsupported claims, and only then sends the safe text.
+**Last completed:** Frontend revamp — dark-first amber/Manrope design system, new workspace shell with a sources panel, command palette and shortcuts, toasts, restyled pages, and a lint/type/build-clean client.
 **Next:** Operator setup — Resend domain, Stripe test Product/Price (`STRIPE_PRO_PRICE_ID`), webhook to Express `/api/auth/stripe/webhook`. See `context/billing-and-credits.md`.
 
 ---
@@ -75,6 +75,13 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 - [x] shadcn/ui component set on `@base-ui/react` primitives (not Radix)
 - [x] Dark mode (`next-themes`)
 - [x] Consistent empty/loading/error state patterns across features
+- [x] Signed-out landing page at `/` (always dark, pricing embedded). Signed-in visitors still redirect to `/dashboard`.
+- [x] Revamped identity from `docs/frontend-design/`: oklch near-black ramp + one amber accent (`primary`, `primary-ink` for text), Manrope + JetBrains Mono (data only), 10px radius base, `ease-house` motion, reduced-motion support, light and dark themes
+- [x] Workspace shell mounted once by `workspace/[id]/layout.tsx`: recessed sidebar (nav + searchable notebook list), translucent header, right-hand sources panel (sheet on mobile)
+- [x] Command palette (Cmd/Ctrl+K) over notebooks, sources and actions; shortcuts dialog (`?`); shortcuts mounted per shell
+- [x] `UserMenu` (billing, memory, theme, shortcuts, sign out); `Toaster` wired for create/delete/save/reprocess outcomes; bulk source actions give one toast
+- [x] Chat: auto-growing composer, non-blocking source status banner, starter prompts, delete-conversation confirmation, guardrail restore via `InputBlockedError`
+- [x] Split sign-in layout with a brand panel; standalone `/pricing` header
 
 ### Deploy
 - [x] Production Dockerfile (`server/Dockerfile.prod`) — Prisma generate + `migrate deploy` on boot, Node heap cap
@@ -87,7 +94,6 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 ## In Progress / Partial
 
 - **Analytics/dashboard charts** — `recharts` and a `chart.tsx` primitive are installed and present, but no feature currently renders a chart. Unclear if this is planned or dead weight (see `build-plan.md`).
-- **Toasts** — `components/ui/toast.tsx` exists but isn't wired to a global provider; errors currently render as inline text instead.
 
 ## Not Started
 
@@ -101,7 +107,8 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 
 ## Known Issues
 
-_None currently._
+- Dev-only: React 19 logs "Encountered a script tag" from `next-themes`' inline script in the console (no effect in production).
+- Unused generated shadcn primitives remain in `components/ui` (alert, aspect-ratio, breadcrumb, button-group, calendar, chart, combobox, context-menu, direction, drawer, input-otp, item, menubar, native-select, navigation-menu, pagination, popover, progress, radio-group, resizable, scroll-area, slider, switch, table, toggle-group). `embla-carousel-react` is now unused after removing `carousel.tsx`.
 
 ---
 
@@ -118,6 +125,11 @@ _None currently._
 - **Output guardrails run after generation and before the reply is sent** — the model stream stays on the server. PII in the answer and citation excerpts is masked, including Indian phone numbers such as `+91 98765 43210`. A phone is PII, not a secret key. A grounding judge scores distinct facts against the retrieved chunks and web snippets. A cited detail that the passage does not contain is unsupported and removed. A sentence that says a detail is not in the sources is kept and is not counted. Repeated wording of the same fact counts once. If no supported fact remains, the reply says the sources do not support an answer. Moderation and secret-key checks can replace the whole reply. Coverage is a pipeline step. The extra judge call stays inside the 0.1 credit. Learning artifacts are unchanged. Retrieval rewrites may search for a missing field, and they do not instruct the search to infer it.
 - **Query and context intelligence is chat-only and stays inside the 0.1 credit** — classification, HyDE, and the coverage judgement use `gpt-4o-mini`. Authority comes from source type unless `metadata.authority` is already set. Contradiction is shown to the model and is not part of the 0.55 gate. Learning artifacts are unchanged. Each step is printed as `[rag]` console lines and stored on `Message.trace` for the chat pipeline panel.
 
+- **Amber is a fill, not a text colour** — `text-primary-ink` carries amber text so light mode keeps AA contrast. The docs' hard-coded hex values, forced dark theme, Clerk, and ChaibookLM-only features (favorites, archive, admin logs, podcast, dashboard storage stats) were not copied.
+- **Chat is never gated by indexing** — the docs lock chat until every source is ready. SourceLab keeps the composer enabled and shows `SourceStatusBanner` instead, since the backend answers from whatever is already indexed.
+- **Workspace pages share one shell via a layout** — `getSession` and `getWorkspaceOrNull` are wrapped in React `cache()` so the layout and page share one fetch. `WorkspaceShell` reads the workspace through `useWorkspace(id, initialData)` so renames show up without a server refetch.
+- **Removed dead code** — `client/components/auth`, `client/components/providers`, the duplicate `client/lib/auth-*`, `require-auth`, `unauth`, `client/hooks/use-mobile.ts`, `SignOutButton`, `ModeToggle`, `WorkspaceList`, workspace gradients, `SourceSidebarList`, and `carousel.tsx`.
+
 ## Notes
 
-- `client/lib/utils.ts` and `client/app/(auth)/layout.tsx` were checked during the orphan cleanup and are still live; they were not deleted. `client/components/ui/*` is the shadcn primitive set and is unrelated to the removed `components/auth` / `components/providers` leftovers.
+- `client/lib/utils.ts` is the live `cn()` helper. `client/app/(auth)/layout.tsx` is now the split sign-in layout. `client/components/ui/*` is the shadcn primitive set.

@@ -56,13 +56,6 @@ export function FlashcardsViewer({ cards }: { cards: Flashcard[] }) {
   const [known, setKnown] = useState<Set<number>>(new Set());
   const dragged = useRef(false);
 
-  useEffect(() => {
-    setOrder(Array.from({ length: cards.length }, (_, index) => index));
-    setPosition(0);
-    setFlipped(false);
-    setKnown(new Set());
-  }, [cards]);
-
   const cardIndex = order[position];
   const card = cards[cardIndex];
 
@@ -200,11 +193,11 @@ export function FlashcardsViewer({ cards }: { cards: Flashcard[] }) {
       <div className="relative h-72 perspective-[1600px]">
         <div
           aria-hidden
-          className="absolute inset-x-6 top-3 h-full rounded-3xl border border-border/50 bg-card/40"
+          className="absolute inset-x-6 top-3 h-full rounded-xl border border-border/50 bg-card/40"
         />
         <div
           aria-hidden
-          className="absolute inset-x-3 top-1.5 h-full rounded-3xl border border-border/70 bg-card/60"
+          className="absolute inset-x-3 top-1.5 h-full rounded-xl border border-border/70 bg-card/60"
         />
 
         <AnimatePresence initial={false} custom={direction} mode="wait">
@@ -337,7 +330,7 @@ export function FlashcardsViewer({ cards }: { cards: Flashcard[] }) {
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.96 }}
-            className="rounded-2xl border border-primary/40 bg-primary/10 px-4 py-3 text-center text-sm"
+            className="rounded-xl border border-primary/40 bg-primary/10 px-4 py-3 text-center text-sm"
           >
             You have marked every card as learned. Nice work.
           </motion.div>
@@ -360,16 +353,16 @@ function CardFace({
 }) {
   return (
     <div
-      className={`absolute inset-0 flex flex-col overflow-hidden rounded-3xl border bg-card p-6 shadow-lg backface-hidden ${
+      className={`absolute inset-0 flex flex-col overflow-hidden rounded-xl border bg-card p-6 shadow-lg backface-hidden ${
         isKnown ? "border-primary/50" : "border-border"
       } ${back ? "transform-[rotateY(180deg)]" : ""}`}
     >
       <div className="flex items-center justify-between">
-        <span className="text-xs tracking-wider text-muted-foreground uppercase">
+        <span className="text-xs text-muted-foreground">
           {side}
         </span>
         {isKnown ? (
-          <span className="flex items-center gap-1 text-xs text-primary">
+          <span className="flex items-center gap-1 text-xs text-primary-ink">
             <CheckIcon className="size-3.5" />
             Learned
           </span>
