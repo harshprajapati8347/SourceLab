@@ -141,14 +141,14 @@ Hook: `useSignOut` (`hooks/use-sign-out.ts`). `app/(auth)/layout.tsx` is a split
 ### `features/chat/components/`
 | Component | Description |
 | --- | --- |
-| `WorkspaceChat` (`workspace-chat.tsx`) | Chat page: resumes the latest conversation; New Chat (or an empty notebook) is the only way to start another. Switcher, export, confirmed delete, message list, "Searching your sources" wait state, composer. At 10 stored messages a `bg-muted/40` strip asks for a new chat. Guardrail blocks restore the draft via `InputBlockedError` |
-| `ChatComposer` (`chat-composer.tsx`) | Auto-growing textarea in a focus-ring box, web-search toggle, send button, shortcut hints. Carries `data-chat-input` for Cmd/Ctrl+/ |
+| `WorkspaceChat` (`workspace-chat.tsx`) | Chat page: resumes the latest conversation; New Chat (or an empty notebook) is the only way to start another. Switcher, export, confirmed delete, message list, "Searching your sources" wait state, composer. Web-search citations render on the live reply. At 10 stored messages a `bg-muted/40` strip asks for a new chat. Guardrail blocks restore the draft via `InputBlockedError` |
+| `ChatComposer` (`chat-composer.tsx`) | Auto-growing textarea in a focus-ring box, web-search on/off toggle, send button, shortcut hints. The toggle label follows the persisted preference immediately. Carries `data-chat-input` for Cmd/Ctrl+/ |
 | `ChatEmptyState` (`chat-empty-state.tsx`) | Empty thread: no sources gives an "Add your first source" action; otherwise starter prompt chips |
 | `SourceStatusBanner` (`source-status-banner.tsx`) | Non-blocking strip above the composer for indexing or failed sources |
 | `ChatMessageBody` (`chat-message-body.tsx`) | Assistant Markdown with inline `CitationMarker`s |
 | `CitationMarker` (`citation-marker.tsx`) | Mono amber chip (`[1]`) with a hover `CitationPreview` |
 | `CitationPreview` (`citation-preview.tsx`) | Hover card: source, excerpt, open link, "Save to library" for web results (with toast) |
-| `CitationSources` (`citation-sources.tsx`) | Unique source chips under an assistant reply |
+| `CitationSources` (`citation-sources.tsx`) | Unique source chips under an assistant reply. Web chips link to the result URL and show the site host |
 | `RagTracePanel` (`rag-trace-panel.tsx`) | "How this answer was found" accordion above the reply, with expandable steps |
 
 ### `features/learn/components/`

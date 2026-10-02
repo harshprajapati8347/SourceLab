@@ -48,11 +48,29 @@ function sourceTypeLabel(type: string) {
     : type;
 }
 
+function siteHost(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
 export function CitationSources({
   workspaceId,
   citations,
 }: CitationSourcesProps) {
-  const visible = citations.filter((citation) => citation.cited !== false);
+  const visible = citations.filter((citation) => {
+    if (citation.cited === false) {
+      return false;
+    }
+
+    if (citation.sourceType === "WEB") {
+      return Boolean(citation.url);
+    }
+
+    return true;
+  });
   const unique = uniqueCitationsBySource(visible);
 
   if (unique.length === 0) {
@@ -72,7 +90,7 @@ export function CitationSources({
         {unique.map((citation) => {
           const description = [
             citation.sourceType === "WEB"
-              ? "Web"
+              ? (citation.url ? siteHost(citation.url) : null) ?? "Web"
               : sourceTypeLabel(citation.sourceType),
             citation.page ? `p.${citation.page}` : null,
           ]
@@ -117,6 +135,7 @@ export function CitationSources({
                           href={citation.url}
                           target="_blank"
                           rel="noreferrer"
+                          title={citation.url}
                         />
                       }
                     />

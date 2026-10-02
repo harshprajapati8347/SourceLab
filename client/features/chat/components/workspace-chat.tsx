@@ -72,12 +72,17 @@ import { CitationSources } from "./citation-sources";
 import { ChatComposer, type RestoredDraft } from "./chat-composer";
 import { SourceStatusBanner } from "./source-status-banner";
 import type { ChatCitation, ChatMessage } from "../lib/types";
+import { parseCitations } from "../lib/api";
 import { ChatMessageLimitError, InputBlockedError } from "../lib/errors";
 import { parseRagTrace, type RagTrace } from "../lib/rag-trace";
 import { workspaceRoutes } from "@/features/workspaces/lib/routes";
 import { billingKeys } from "@/features/billing/hooks/use-billing";
 import { INSUFFICIENT_CREDITS_MESSAGE } from "@/features/billing/lib/constants";
-import { useChatPreferences } from "../stores/chat-preferences";
+import {
+  readWorkspaceChatPrefs,
+  useChatPreferences,
+  useWorkspaceChatPrefs,
+} from "../stores/chat-preferences";
 import {
   downloadMarkdown,
   exportConversationMarkdown,
@@ -88,7 +93,10 @@ type WorkspaceChatProps = {
   defaultModel?: string;
 };
 
-type SourceLabMessage = UIMessage<unknown, { rag: RagTrace }>;
+type SourceLabMessage = UIMessage<
+  unknown,
+  { rag: RagTrace; citations: ChatCitation[] }
+>;
 
 /** User and assistant rows stored on one conversation. Matches server `CHAT_MESSAGE_LIMIT`. */
 const CHAT_MESSAGE_LIMIT = 10;
@@ -130,6 +138,55 @@ function readRagTrace(message: SourceLabMessage) {
   return parseRagTrace(part.data);
 }
 
+/** Citations streamed with the reply, before the saved message id exists. */
+function readStreamedCitations(message: SourceLabMessage) {
+  const part = message.parts.find((item) => item.type === "data-citations");
+  if (!part || part.type !== "data-citations") {
+    return null;
+  }
+
+  return parseCitations(part.data);
+}
+
+/**
+ * Saved rows are keyed by database ids. A live reply uses a client id until
+ * the thread is reloaded, so fall back to the streamed part and then to the
+ * stored row at the same position.
+ */
+function citationsForMessage(
+  message: SourceLabMessage,
+  index: number,
+  uiMessages: SourceLabMessage[],
+  stored: ChatMessage[] | undefined,
+  byId: Record<string, ChatCitation[]>,
+) {
+  const saved = byId[message.id];
+  if (saved?.length) {
+    return saved;
+  }
+
+  const streamed = readStreamedCitations(message);
+  if (streamed?.length) {
+    return streamed;
+  }
+
+  if (
+    !stored ||
+    message.role !== "assistant" ||
+    stored.length !== uiMessages.length
+  ) {
+    return undefined;
+  }
+
+  const aligned = stored[index];
+  if (!aligned || aligned.role !== "ASSISTANT") {
+    return undefined;
+  }
+
+  const parsed = parseCitations(aligned.citations);
+  return parsed?.length ? parsed : undefined;
+}
+
 function toStoredParts(message: ChatMessage): SourceLabMessage["parts"] {
   const parts: SourceLabMessage["parts"] = [
     { type: "text", text: message.content },
@@ -165,9 +222,8 @@ export function WorkspaceChat({
 
   const setAddSourceOpen = useUIStore((state) => state.setAddSourceOpen);
 
-  const getPrefs = useChatPreferences((state) => state.getPrefs);
   const setWebSearch = useChatPreferences((state) => state.setWebSearch);
-  const chatPrefs = getPrefs(workspaceId, defaultModel);
+  const chatPrefs = useWorkspaceChatPrefs(workspaceId, defaultModel);
 
   const { data: sources } = useSources(workspaceId);
   const {
@@ -217,10 +273,18 @@ export function WorkspaceChat({
       new DefaultChatTransport({
         api: `/api/workspaces/${workspaceId}/chat`,
         credentials: "include",
-        body: {
-          ...(conversationId ? { conversationId } : {}),
-          model: chatPrefs.model,
-          webSearch: chatPrefs.webSearch,
+        body: () => {
+          const prefs = readWorkspaceChatPrefs(
+            useChatPreferences.getState().byWorkspace,
+            workspaceId,
+            defaultModel,
+          );
+
+          return {
+            ...(conversationId ? { conversationId } : {}),
+            model: prefs.model,
+            webSearch: prefs.webSearch,
+          };
         },
         fetch: async (url, init) => {
           const response = await fetch(url, {
@@ -271,8 +335,7 @@ export function WorkspaceChat({
       workspaceId,
       conversationId,
       handleConversationId,
-      chatPrefs.model,
-      chatPrefs.webSearch,
+      defaultModel,
       queryClient,
     ],
   );
@@ -313,8 +376,8 @@ export function WorkspaceChat({
   const isStreaming = status === "streaming" || status === "submitted";
   const isWaitingForFirstToken = status === "submitted";
 
-  // Citations are fully derived from the fetched messages, so compute them
-  // during render instead of syncing them into state via an effect.
+  // Saved citations are keyed by database id. Live replies also carry a
+  // streamed `data-citations` part, matched in `citationsForMessage`.
   const citationsByMessageId = useMemo<Record<string, ChatCitation[]>>(
     () => (storedMessages ? buildCitationMap(storedMessages) : {}),
     [storedMessages],
@@ -492,10 +555,22 @@ export function WorkspaceChat({
       return;
     }
 
+    const exportCitations = Object.fromEntries(
+      messages.flatMap((message, index) => {
+        const citations = citationsForMessage(
+          message,
+          index,
+          messages,
+          storedMessages,
+          citationsByMessageId,
+        );
+        return citations ? [[message.id, citations]] : [];
+      }),
+    );
     const markdown = exportConversationMarkdown({
       conversation: activeConversation ?? null,
       messages,
-      citationsByMessageId,
+      citationsByMessageId: exportCitations,
     });
     const slug =
       activeConversation?.title?.replace(/[^\w-]+/g, "-").toLowerCase() ??
@@ -629,7 +704,13 @@ export function WorkspaceChat({
                     const isUser = message.role === "user";
                     const text = getMessageText(message);
                     const trace = isUser ? null : readRagTrace(message);
-                    const citations = citationsByMessageId[message.id];
+                    const citations = citationsForMessage(
+                      message,
+                      messageIndex,
+                      messages,
+                      storedMessages,
+                      citationsByMessageId,
+                    );
                     const isLastMessage = messageIndex === messages.length - 1;
                     const isAnimatingMessage =
                       !isUser && isStreaming && isLastMessage;

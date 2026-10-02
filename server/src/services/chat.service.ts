@@ -396,7 +396,7 @@ export async function streamWorkspaceChat(
         ? {
             web_search: tool({
               description:
-                "Search the web for up-to-date information outside the workspace sources.",
+                "Search the web for up-to-date information outside the workspace sources. The result lists every web page for this reply as [W1], [W2], and so on. Cite those markers. They match the links shown to the user.",
               inputSchema: z.object({
                 query: z
                   .string()
@@ -408,7 +408,7 @@ export async function streamWorkspaceChat(
                   webSearchResults,
                   results,
                 );
-                return formatTavilyResultsForPrompt(results);
+                return formatTavilyResultsForPrompt(webSearchResults);
               },
             }),
           }
@@ -579,6 +579,11 @@ export async function streamWorkspaceChat(
         }
       }
 
+      writer.write({
+        type: "data-citations",
+        id: "citations",
+        data: citations,
+      });
       writer.write({ type: "text-start", id: "assistant-text" });
       writer.write({
         type: "text-delta",

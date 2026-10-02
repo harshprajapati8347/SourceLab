@@ -119,7 +119,7 @@ export function ChatComposer({
                 disabled={isBusy}
               >
                 <GlobeIcon />
-                Web search{webSearchEnabled ? " on" : ""}
+                Web search {webSearchEnabled ? "on" : "off"}
               </Button>
             ) : (
               <span />

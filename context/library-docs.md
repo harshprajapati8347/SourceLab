@@ -89,6 +89,7 @@ const result = streamText({
 });
 const drafted = (await result.text).trim();
 // Output guardrails run on `drafted` before any text chunk is written.
+writer.write({ type: "data-citations", id: "citations", data: citations });
 writer.write({ type: "text-start", id: "assistant-text" });
 writer.write({ type: "text-delta", id: "assistant-text", delta: safeText });
 writer.write({ type: "text-end", id: "assistant-text" });
@@ -162,7 +163,7 @@ return result.output;
 ### Tavily (`@tavily/core`)
 
 - `tavily({ apiKey }).search(query, { searchDepth: "basic", maxResults: 5, includeAnswer: true })` — used only as the chat `web_search` tool, never for source ingestion.
-- Results are formatted into `[W1]`, `[W2]`, … blocks (`formatTavilyResultsForPrompt`) for the model prompt, and separately mapped into `sourceType: "WEB"` citations saved on the assistant message.
+- Results are formatted into `[W1]`, `[W2]`, … blocks (`formatTavilyResultsForPrompt`) for the model prompt, and separately mapped into `sourceType: "WEB"` citations saved on the assistant message. A later tool call returns the merged list, so `[W#]` stays aligned with those URLs. The same citation array is streamed as `data-citations` before the answer text.
 - Soft dependency: `webSearchEnabled` on the server is `input.webSearch === true && !!process.env.TAVILY_API_KEY?.trim()` — the toggle is silently ineffective without a key rather than erroring.
 
 ### `unpdf`

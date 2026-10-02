@@ -170,9 +170,11 @@ export function buildChatSystemPrompt(input: {
 
   if (input.webSearchEnabled) {
     sections.push(
-      "You have access to a web_search tool for up-to-date information outside the workspace.",
-      "Use it when the user asks about recent events or topics not covered by their sources.",
-      "Cite web results inline using [W1], [W2], etc. matching the web result blocks.",
+      "You have access to a web_search tool for information outside the workspace.",
+      "Call it when the workspace context does not contain the requested fact, including recent events.",
+      "The tool returns every web page for this reply, labeled [W1], [W2], and so on.",
+      "Every sentence that uses a web result must include that marker in the same sentence.",
+      "Do not invent web markers or URLs.",
     );
   }
 
@@ -215,7 +217,7 @@ export function buildChatSystemPrompt(input: {
       prefetchedWeb
         ? "Use the web results below when they apply. Write each factual claim as its own sentence, with its citation marker in that sentence. If a requested detail is not stated, say that it is not in the sources. Do not infer or fill in missing details."
         : input.webSearchEnabled
-          ? "Use web search when needed, or answer from general knowledge."
+          ? "Call web_search before answering from general knowledge. Cite each web fact with its [W#] marker."
           : "Answer helpfully from general knowledge and suggest adding or processing sources when appropriate.",
       "Do not invent citations.",
     );
@@ -230,11 +232,15 @@ export function buildChatSystemPrompt(input: {
     .join("\n\n");
 
   sections.push(
-    "Use ONLY the retrieved context below when making factual claims about their materials.",
+    input.webSearchEnabled
+      ? "Use the workspace context below for the user's materials. For facts outside that context, call web_search and cite the page with its [W#] marker."
+      : "Use ONLY the retrieved context below when making factual claims about their materials.",
     "If the context is insufficient, say so clearly.",
     "Cite sources inline using [1], [2], etc. matching the numbered context blocks.",
     "Write each factual claim as its own sentence, with its citation marker in that sentence.",
-    "If a requested detail is not stated in the retrieved context, say that it is not in the sources in its own sentence.",
+    input.webSearchEnabled
+      ? "If a requested detail is not in the workspace context, search the web before saying it is missing."
+      : "If a requested detail is not stated in the retrieved context, say that it is not in the sources in its own sentence.",
     "Do not infer, guess, or fill in missing details.",
     "Keep answers concise, accurate, and educational.",
     "",
@@ -255,7 +261,7 @@ function appendWebResults(
   }
 
   sections.push(
-    "Web results retrieved before this reply. Cite them as [W1], [W2], and so on.",
+    "Web results retrieved before this reply. Cite them as [W1], [W2], and so on. Those markers are the links shown to the user.",
     formatTavilyResultsForPrompt(webResults),
   );
 }
