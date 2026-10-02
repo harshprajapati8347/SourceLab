@@ -61,5 +61,11 @@ export const RAG_NEUTRAL_FRESHNESS = 0.5;
 /** Enqueue a conversation summary job every N persisted messages. */
 export const CONVERSATION_SUMMARY_INTERVAL = 8;
 
+/**
+ * Maximum user and assistant messages stored on one conversation.
+ * The next user message is rejected before retrieval or credit deduction.
+ */
+export const CHAT_MESSAGE_LIMIT = 10;
+
 /** Max recent UI messages sent to the model when a rolling summary exists. */
 export const RECENT_MESSAGE_WINDOW = 12;

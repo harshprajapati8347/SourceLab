@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { PanelRightIcon, SearchIcon } from "lucide-react";
+import { HouseIcon, PanelRightIcon, SearchIcon } from "lucide-react";
 import { CreditsBadge } from "@/features/billing";
 import { UserMenu } from "@/features/auth/components/user-menu";
 import { learnRoutes } from "@/features/learn/lib/routes";
@@ -66,6 +67,16 @@ export function WorkspaceShell({
       <SidebarInset className="min-h-0 min-w-0 overflow-hidden">
         <header className="flex h-14 shrink-0 items-center gap-2 border-b bg-background/80 px-3 backdrop-blur-md sm:gap-3 sm:px-4">
           <SidebarTrigger className="-ml-1" />
+          <Button
+            nativeButton={false}
+            variant="ghost"
+            size="icon-sm"
+            className="md:hidden"
+            render={<Link href="/" />}
+          >
+            <HouseIcon />
+            <span className="sr-only">Home</span>
+          </Button>
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <span aria-hidden="true" className="text-base leading-none">
               {workspace.icon ?? "📚"}

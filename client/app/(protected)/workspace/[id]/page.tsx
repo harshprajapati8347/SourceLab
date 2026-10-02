@@ -20,6 +20,7 @@ export default async function WorkspacePage({ params }: WorkspacePageProps) {
   return (
     <Suspense fallback={null}>
       <WorkspaceChat
+        key={workspace.id}
         workspaceId={workspace.id}
         defaultModel={workspace.defaultModel}
       />

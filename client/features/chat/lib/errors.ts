@@ -11,3 +11,11 @@ export class InputBlockedError extends Error {
     this.draft = draft;
   }
 }
+
+/** Raised when a conversation already holds the maximum number of messages. */
+export class ChatMessageLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ChatMessageLimitError";
+  }
+}

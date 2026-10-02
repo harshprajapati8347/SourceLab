@@ -38,6 +38,13 @@ import {
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
 import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -65,7 +72,7 @@ import { CitationSources } from "./citation-sources";
 import { ChatComposer, type RestoredDraft } from "./chat-composer";
 import { SourceStatusBanner } from "./source-status-banner";
 import type { ChatCitation, ChatMessage } from "../lib/types";
-import { InputBlockedError } from "../lib/errors";
+import { ChatMessageLimitError, InputBlockedError } from "../lib/errors";
 import { parseRagTrace, type RagTrace } from "../lib/rag-trace";
 import { workspaceRoutes } from "@/features/workspaces/lib/routes";
 import { billingKeys } from "@/features/billing/hooks/use-billing";
@@ -82,6 +89,30 @@ type WorkspaceChatProps = {
 };
 
 type SourceLabMessage = UIMessage<unknown, { rag: RagTrace }>;
+
+/** User and assistant rows stored on one conversation. Matches server `CHAT_MESSAGE_LIMIT`. */
+const CHAT_MESSAGE_LIMIT = 10;
+
+function messageLimitCopy() {
+  return `This chat has reached the ${CHAT_MESSAGE_LIMIT}-message limit. Start a new chat to continue.`;
+}
+
+function threadMatchesStored(
+  uiMessages: { id: string }[],
+  stored: { id: string }[] | undefined,
+) {
+  if (!stored) {
+    return false;
+  }
+
+  if (stored.length === 0) {
+    return uiMessages.length === 0;
+  }
+
+  return (
+    uiMessages[0]?.id === stored[0]?.id && uiMessages.length >= stored.length
+  );
+}
 
 function getMessageText(message: SourceLabMessage) {
   return message.parts
@@ -120,7 +151,13 @@ export function WorkspaceChat({
   const searchParams = useSearchParams();
   const askPrompt = searchParams.get("ask");
   const handledAskPrompt = useRef<string | null>(null);
-  const [conversationId, setConversationId] = useState<string | null>(null);
+  /**
+   * `undefined` follows the latest chat. `null` is an explicit new chat.
+   * A string is a chat the user selected or the server just created.
+   */
+  const [chosenId, setChosenId] = useState<string | null | undefined>(
+    undefined,
+  );
   const [restoredDraft, setRestoredDraft] = useState<RestoredDraft | null>(
     null,
   );
@@ -133,8 +170,29 @@ export function WorkspaceChat({
   const chatPrefs = getPrefs(workspaceId, defaultModel);
 
   const { data: sources } = useSources(workspaceId);
-  const { data: conversations = [], isLoading: conversationsLoading } =
-    useConversations(workspaceId);
+  const {
+    data: conversationData,
+    isPending: conversationsPending,
+    isError: conversationsError,
+    refetch: refetchConversations,
+  } = useConversations(workspaceId);
+  const conversations = useMemo(
+    () => conversationData ?? [],
+    [conversationData],
+  );
+  const conversationId =
+    chosenId === null
+      ? null
+      : chosenId !== undefined
+        ? chosenId
+        : conversationsPending || conversationsError
+          ? null
+          : (conversations[0]?.id ?? null);
+  const draftNewChat = chosenId === null;
+  const showConversationError =
+    conversationsError && conversations.length === 0 && chosenId !== null;
+  const awaitingConversation =
+    chosenId === undefined && conversationsPending && !conversationsError;
   const { data: storedMessages, isLoading: messagesLoading } =
     useConversationMessages(workspaceId, conversationId);
   const createConversation = useCreateConversation(workspaceId);
@@ -146,7 +204,7 @@ export function WorkspaceChat({
 
   const handleConversationId = useCallback(
     (id: string) => {
-      setConversationId(id);
+      setChosenId(id);
       void queryClient.invalidateQueries({
         queryKey: chatKeys(workspaceId).conversations(),
       });
@@ -187,6 +245,10 @@ export function WorkspaceChat({
                 ? INSUFFICIENT_CREDITS_MESSAGE
                 : "Something went wrong. Please try again.");
 
+            if (payload?.details?.code === "CHAT_MESSAGE_LIMIT") {
+              throw new ChatMessageLimitError(message);
+            }
+
             if (
               payload?.details?.code === "INPUT_BLOCKED" &&
               typeof payload.details.message === "string"
@@ -215,7 +277,7 @@ export function WorkspaceChat({
     ],
   );
 
-  const { messages, sendMessage, setMessages, status, error } =
+  const { messages, sendMessage, setMessages, status, error, clearError } =
     useChat<SourceLabMessage>({
       transport,
       onError: (chatError) => {
@@ -229,6 +291,17 @@ export function WorkspaceChat({
           setMessages((current) => {
             const last = current[current.length - 1];
             if (last?.role === "user" && getMessageText(last) === draft) {
+              return current.slice(0, -1);
+            }
+            return current;
+          });
+          return;
+        }
+
+        if (chatError instanceof ChatMessageLimitError) {
+          setMessages((current) => {
+            const last = current[current.length - 1];
+            if (last?.role === "user") {
               return current.slice(0, -1);
             }
             return current;
@@ -249,7 +322,9 @@ export function WorkspaceChat({
 
   useEffect(() => {
     if (!conversationId) {
-      setMessages([]);
+      if (!isStreaming) {
+        setMessages([]);
+      }
       return;
     }
 
@@ -257,34 +332,68 @@ export function WorkspaceChat({
       return;
     }
 
-    setMessages(
-      storedMessages.map((message) => ({
+    setMessages((current) => {
+      const sameThread =
+        storedMessages.length > 0 &&
+        current.length >= storedMessages.length &&
+        current[0]?.id === storedMessages[0]?.id;
+      if (sameThread) {
+        return current;
+      }
+
+      return storedMessages.map((message) => ({
         id: message.id,
         role: message.role === "USER" ? "user" : "assistant",
         parts: toStoredParts(message),
-      })),
-    );
+      }));
+    });
   }, [conversationId, storedMessages, setMessages, isStreaming]);
 
+  const wasStreaming = useRef(false);
+
   useEffect(() => {
-    if (status !== "ready" || !conversationId) {
+    if (isStreaming) {
+      wasStreaming.current = true;
       return;
     }
 
+    if (!wasStreaming.current || status !== "ready" || !conversationId) {
+      return;
+    }
+
+    wasStreaming.current = false;
     void queryClient.invalidateQueries({
       queryKey: chatKeys(workspaceId).messages(conversationId),
     });
     void queryClient.invalidateQueries({ queryKey: billingKeys.all });
-  }, [status, conversationId, queryClient, workspaceId]);
+  }, [isStreaming, status, conversationId, queryClient, workspaceId]);
 
   useEffect(() => {
     if (
       !askPrompt ||
+      conversationsPending ||
+      showConversationError ||
       status !== "ready" ||
-      conversationId ||
-      messages.length > 0 ||
       handledAskPrompt.current === askPrompt
     ) {
+      return;
+    }
+
+    if (!draftNewChat && !conversationId && conversations.length > 0) {
+      return;
+    }
+
+    if (conversationId && !threadMatchesStored(messages, storedMessages)) {
+      return;
+    }
+
+    if (
+      conversationId &&
+      Math.max(messages.length, storedMessages?.length ?? 0) >=
+        CHAT_MESSAGE_LIMIT
+    ) {
+      handledAskPrompt.current = askPrompt;
+      router.replace(workspaceRoutes.detail(workspaceId));
       return;
     }
 
@@ -293,17 +402,63 @@ export function WorkspaceChat({
     router.replace(workspaceRoutes.detail(workspaceId));
   }, [
     askPrompt,
+    conversationsPending,
+    showConversationError,
     status,
+    draftNewChat,
     conversationId,
-    messages.length,
+    conversations.length,
+    messages,
+    storedMessages,
     sendMessage,
     router,
     workspaceId,
   ]);
 
+  const threadCount = threadMatchesStored(messages, storedMessages)
+    ? messages.length
+    : (storedMessages?.length ?? 0);
+  const isAtMessageLimit =
+    conversationId !== null &&
+    !draftNewChat &&
+    !messagesLoading &&
+    !isStreaming &&
+    storedMessages !== undefined &&
+    threadCount >= CHAT_MESSAGE_LIMIT;
+  const storedPendingPaint =
+    conversationId !== null &&
+    !isStreaming &&
+    (storedMessages?.length ?? 0) > 0 &&
+    messages.length === 0;
+  const threadStale =
+    conversationId !== null &&
+    !isStreaming &&
+    storedMessages !== undefined &&
+    storedMessages.length > 0 &&
+    !threadMatchesStored(messages, storedMessages);
+  const isLoadingThread =
+    awaitingConversation ||
+    (conversationId !== null && messagesLoading) ||
+    storedPendingPaint ||
+    threadStale;
+
   function handleNewChat() {
-    setConversationId(null);
+    setChosenId(null);
     setMessages([]);
+    clearError();
+  }
+
+  function sendUserMessage(text: string) {
+    if (
+      isLoadingThread ||
+      showConversationError ||
+      isAtMessageLimit ||
+      isStreaming
+    ) {
+      return;
+    }
+
+    void sendMessage({ text });
   }
 
   async function handleDeleteConversation() {
@@ -311,10 +466,17 @@ export function WorkspaceChat({
       return;
     }
 
+    const removedId = conversationId;
+
     try {
-      await deleteConversation.mutateAsync(conversationId);
+      await deleteConversation.mutateAsync(removedId);
       setConfirmDeleteOpen(false);
-      handleNewChat();
+      const next = conversations.find(
+        (conversation) => conversation.id !== removedId,
+      );
+      setChosenId(next ? next.id : null);
+      setMessages([]);
+      clearError();
       toast.add({ title: "Conversation deleted", type: "success" });
     } catch {
       toast.add({
@@ -342,13 +504,20 @@ export function WorkspaceChat({
     toast.add({ title: "Conversation exported", type: "success" });
   }
 
-  const isLoadingThread = conversationsLoading || messagesLoading;
+  const selectValue =
+    draftNewChat ||
+    (!conversationsPending &&
+      !conversationsError &&
+      conversations.length === 0 &&
+      conversationId === null)
+      ? "new"
+      : conversationId;
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
       <div className="flex h-12 shrink-0 items-center gap-2 border-b px-3 sm:px-4">
         <Select
-          value={conversationId ?? "new"}
+          value={selectValue}
           items={[
             { value: "new", label: "New chat" },
             ...conversations.map((conversation) => ({
@@ -357,18 +526,27 @@ export function WorkspaceChat({
             })),
           ]}
           onValueChange={(value) => {
+            if (!value || value === selectValue) {
+              return;
+            }
             if (value === "new") {
               handleNewChat();
               return;
             }
-            setConversationId(value);
+            setChosenId(value);
+            setMessages([]);
+            clearError();
           }}
         >
           <SelectTrigger
             aria-label="Conversation"
             className="h-8 min-w-0 max-w-xs flex-1 border-transparent bg-transparent hover:bg-muted"
           >
-            <SelectValue placeholder="Select conversation" />
+            <SelectValue
+              placeholder={
+                conversationsPending ? "Loading chats" : "Select conversation"
+              }
+            />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="new">New chat</SelectItem>
@@ -414,7 +592,21 @@ export function WorkspaceChat({
         <MessageScroller className="min-h-0 flex-1">
           <MessageScrollerViewport>
             <MessageScrollerContent className="mx-auto w-full max-w-3xl px-4 py-6">
-              {isLoadingThread ? (
+              {showConversationError ? (
+                <Empty className="border">
+                  <EmptyHeader>
+                    <EmptyTitle>Could not load chats</EmptyTitle>
+                    <EmptyDescription>
+                      Check your connection and try again.
+                    </EmptyDescription>
+                  </EmptyHeader>
+                  <EmptyContent>
+                    <Button onClick={() => void refetchConversations()}>
+                      Try again
+                    </Button>
+                  </EmptyContent>
+                </Empty>
+              ) : isLoadingThread ? (
                 <div className="space-y-4" aria-busy="true">
                   <Skeleton className="h-14 w-2/3 rounded-xl" />
                   <Skeleton className="ml-auto h-10 w-1/2 rounded-xl" />
@@ -423,8 +615,12 @@ export function WorkspaceChat({
               ) : messages.length === 0 ? (
                 <ChatEmptyState
                   hasSources={sources ? sources.length > 0 : undefined}
-                  disabled={isStreaming || createConversation.isPending}
-                  onPrompt={(text) => void sendMessage({ text })}
+                  disabled={
+                    isStreaming ||
+                    createConversation.isPending ||
+                    awaitingConversation
+                  }
+                  onPrompt={sendUserMessage}
                   onAddSource={() => setAddSourceOpen(true)}
                 />
               ) : (
@@ -503,7 +699,7 @@ export function WorkspaceChat({
         </MessageScroller>
       </MessageScrollerProvider>
 
-      {error ? (
+      {error && !isAtMessageLimit ? (
         <div
           role="alert"
           className="shrink-0 border-t bg-destructive/10 px-4 py-2 text-sm text-destructive"
@@ -512,17 +708,35 @@ export function WorkspaceChat({
         </div>
       ) : null}
 
+      {isAtMessageLimit ? (
+        <div
+          role="status"
+          className="shrink-0 border-t bg-muted/40 px-4 py-3"
+        >
+          <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">{messageLimitCopy()}</p>
+            <Button size="sm" className="shrink-0" onClick={handleNewChat}>
+              <MessageSquarePlusIcon />
+              New chat
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       <SourceStatusBanner workspaceId={workspaceId} sources={sources} />
 
       <ChatComposer
-        disabled={createConversation.isPending}
+        disabled={
+          createConversation.isPending ||
+          isLoadingThread ||
+          showConversationError ||
+          isAtMessageLimit
+        }
         isStreaming={isStreaming}
         webSearchEnabled={chatPrefs.webSearch}
         onWebSearchChange={(enabled) => setWebSearch(workspaceId, enabled)}
         restoredDraft={restoredDraft}
-        onSubmit={(text) => {
-          void sendMessage({ text });
-        }}
+        onSubmit={sendUserMessage}
       />
 
       <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>

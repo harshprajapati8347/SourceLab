@@ -52,6 +52,8 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 - [x] Rolling conversation summarization every 8 messages, feeding both the chat context window and Mem0
 - [x] Mem0 long-term memory: recalled into chat context, auto-learned from conversations
 - [x] Conversation delete, "new chat", markdown export
+- [x] Opening a notebook resumes its latest chat. A new chat is created only from New Chat, or when the notebook has no chats
+- [x] A conversation stops at 10 stored messages and asks the user to start a new chat. The server rejects the next turn before retrieval or credit deduction
 - [x] Deep-link into chat with a pre-filled question (`?ask=...`, used by the mind map viewer's "ask in chat")
 - [x] Input guardrails (`@openai/guardrails`) before RAG: moderation, jailbreak, off-topic, and blocking PII for payment credentials. A block returns the original message and restores it in the composer.
 - [x] Query classification and routing (rewrite, HyDE, sub-questions, multi-query) before Pinecone retrieval
@@ -78,6 +80,7 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 - [x] Signed-out landing page at `/` (always dark, pricing embedded). Signed-in visitors still redirect to `/dashboard`.
 - [x] Revamped identity from `docs/frontend-design/`: oklch near-black ramp + one amber accent (`primary`, `primary-ink` for text), Manrope + JetBrains Mono (data only), 10px radius base, `ease-house` motion, reduced-motion support, light and dark themes
 - [x] Workspace shell mounted once by `workspace/[id]/layout.tsx`: recessed sidebar (nav + searchable notebook list), translucent header, right-hand sources panel (sheet on mobile)
+- [x] Mobile workspace header includes a Home icon linking to `/` (hidden from the `md` breakpoint up)
 - [x] Command palette (Cmd/Ctrl+K) over notebooks, sources and actions; shortcuts dialog (`?`); shortcuts mounted per shell
 - [x] `UserMenu` (billing, memory, theme, shortcuts, sign out); `Toaster` wired for create/delete/save/reprocess outcomes; bulk source actions give one toast
 - [x] Chat: auto-growing composer, non-blocking source status banner, starter prompts, delete-conversation confirmation, guardrail restore via `InputBlockedError`
@@ -127,6 +130,7 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 
 - **Amber is a fill, not a text colour** — `text-primary-ink` carries amber text so light mode keeps AA contrast. The docs' hard-coded hex values, forced dark theme, Clerk, and ChaibookLM-only features (favorites, archive, admin logs, podcast, dashboard storage stats) were not copied.
 - **Chat is never gated by indexing** — the docs lock chat until every source is ready. SourceLab keeps the composer enabled and shows `SourceStatusBanner` instead, since the backend answers from whatever is already indexed.
+- **A notebook opens its latest chat** — reload, returning from Sources, and other navigation do not start a conversation. New Chat, or the first message when the notebook has no chats, is what creates one. At 10 stored messages (user and assistant) the composer stops, and the API rejects another turn before retrieval or a credit charge.
 - **Workspace pages share one shell via a layout** — `getSession` and `getWorkspaceOrNull` are wrapped in React `cache()` so the layout and page share one fetch. `WorkspaceShell` reads the workspace through `useWorkspace(id, initialData)` so renames show up without a server refetch.
 - **Removed dead code** — `client/components/auth`, `client/components/providers`, the duplicate `client/lib/auth-*`, `require-auth`, `unauth`, `client/hooks/use-mobile.ts`, `SignOutButton`, `ModeToggle`, `WorkspaceList`, workspace gradients, `SourceSidebarList`, and `carousel.tsx`.
 

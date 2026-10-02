@@ -29,6 +29,7 @@ import {
   type UIMessage,
 } from "ai";
 import {
+  CHAT_MESSAGE_LIMIT,
   CHAT_MODEL,
   CHAT_MODELS,
   CONVERSATION_SUMMARY_INTERVAL,
@@ -217,7 +218,7 @@ async function resolveConversation(
  *
  * **Pipeline:**
  * 1. Validate user message and run input guardrails
- * 2. Resolve/create conversation and save the user message
+ * 2. Resolve/create conversation, reject a thread already at the message limit, and save the user message
  * 3. Parallel: query and context pipeline + Mem0 memory search
  * 4. Build system prompt and generate the model response via AI SDK
  * 5. Mask PII, check grounding and citations, then run policy and secret checks
@@ -228,7 +229,7 @@ async function resolveConversation(
  * @param userId - Authenticated user's id
  * @param input - Client chat payload from `useChat`
  * @returns Writes UI message stream to `res`; sets `X-Conversation-Id` header
- * @throws {ValidationError} When no user message text is present
+ * @throws {ValidationError} When no user message text is present, or the conversation is already at the message limit
  * @throws {InputBlockedError} When input guardrails reject the user message
  * @throws {NotFoundError} When conversation or workspace is not found
  * @throws {PaymentRequiredError} When the user has fewer than 0.1 credits
@@ -272,6 +273,16 @@ export async function streamWorkspaceChat(
     input.conversationId,
     userText,
   );
+
+  const existingMessageCount = await countMessagesByConversationId(
+    conversation.id,
+  );
+  if (existingMessageCount >= CHAT_MESSAGE_LIMIT) {
+    throw new ValidationError(
+      `This chat has reached the ${CHAT_MESSAGE_LIMIT}-message limit. Start a new chat to continue.`,
+      { code: "CHAT_MESSAGE_LIMIT" },
+    );
+  }
 
   await checkAndDeductCredits(userId, CREDIT_COSTS.chatMessage);
 

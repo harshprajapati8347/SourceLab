@@ -118,7 +118,7 @@ Hook: `useSignOut` (`hooks/use-sign-out.ts`). `app/(auth)/layout.tsx` is a split
 | `CreateWorkspaceCard` (`create-workspace-card.tsx`) | Dashed "New notebook" tile |
 | `WorkspaceFormDialog` (`workspace-form-dialog.tsx`) | Create/edit dialog (title, description, icon radiogroup). The form body is an inner component mounted per open |
 | `DeleteWorkspaceDialog` (`delete-workspace-dialog.tsx`) | `AlertDialog` that names what is lost |
-| `WorkspaceShell` (`workspace-shell.tsx`) | Sidebar + inset frame for `/workspace/[id]/*`: header (title, search, model picker, credits, sources toggle, `UserMenu`), right sources panel / sheet, add-source dialog, `AppOverlays`. Mounted by the route layout |
+| `WorkspaceShell` (`workspace-shell.tsx`) | Sidebar + inset frame for `/workspace/[id]/*`: header (title, search, model picker, credits, sources toggle, `UserMenu`; Home icon linking to `/` below `md`), right sources panel / sheet, add-source dialog, `AppOverlays`. Mounted by the route layout |
 | `WorkspaceSidebar` (`workspace-sidebar.tsx`) | Recessed sidebar: brand, notebook nav (Chat, Learn, Sources, Settings) with the amber active tick, `WorkspaceSwitcher`, "All notebooks" |
 | `WorkspaceSwitcher` (`workspace-switcher.tsx`) | Searchable notebook list in the sidebar; "+" opens the create dialog |
 | `WorkspaceHeaderActions` (`workspace-header-actions.tsx`) | Per-notebook chat model picker |
@@ -141,7 +141,7 @@ Hook: `useSignOut` (`hooks/use-sign-out.ts`). `app/(auth)/layout.tsx` is a split
 ### `features/chat/components/`
 | Component | Description |
 | --- | --- |
-| `WorkspaceChat` (`workspace-chat.tsx`) | Chat page: conversation switcher, new/export/delete (confirmed) actions, message list, "Searching your sources" wait state, composer. Guardrail-blocked messages come back through `InputBlockedError` and `useChat`'s `onError` |
+| `WorkspaceChat` (`workspace-chat.tsx`) | Chat page: resumes the latest conversation; New Chat (or an empty notebook) is the only way to start another. Switcher, export, confirmed delete, message list, "Searching your sources" wait state, composer. At 10 stored messages a `bg-muted/40` strip asks for a new chat. Guardrail blocks restore the draft via `InputBlockedError` |
 | `ChatComposer` (`chat-composer.tsx`) | Auto-growing textarea in a focus-ring box, web-search toggle, send button, shortcut hints. Carries `data-chat-input` for Cmd/Ctrl+/ |
 | `ChatEmptyState` (`chat-empty-state.tsx`) | Empty thread: no sources gives an "Add your first source" action; otherwise starter prompt chips |
 | `SourceStatusBanner` (`source-status-banner.tsx`) | Non-blocking strip above the composer for indexing or failed sources |
