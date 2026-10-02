@@ -9,6 +9,7 @@ import {
   createSource,
   deleteSource,
   getSource,
+  getSourceChunks,
   importWebsiteSource,
   importWebSearchSource,
   importYoutubeSource,
@@ -55,6 +56,18 @@ export function useSources(
       );
       return hasProcessing ? 3000 : false;
     },
+  });
+}
+
+export function useSourceChunks(
+  workspaceId: string,
+  sourceId: string,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: [...sourceKeys(workspaceId).detail(sourceId), "chunks"] as const,
+    queryFn: () => getSourceChunks(workspaceId, sourceId),
+    enabled,
   });
 }
 

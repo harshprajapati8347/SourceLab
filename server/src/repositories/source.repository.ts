@@ -139,3 +139,32 @@ export async function deleteSourceRecord(sourceId: string) {
     where: { id: sourceId },
   });
 }
+
+/**
+ * Loads ready sources and their chunks for an overview question.
+ *
+ * Chunks stay in index order so the first row of each source is its opening passage.
+ *
+ * @param workspaceId - Workspace whose ready sources should be sampled
+ * @returns Ready sources, oldest first, each with its chunks
+ */
+export function findReadySourcesWithChunks(workspaceId: string) {
+  return prisma.source.findMany({
+    where: { workspaceId, status: "READY" },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      title: true,
+      type: true,
+      chunks: {
+        orderBy: { index: "asc" },
+        select: {
+          id: true,
+          index: true,
+          content: true,
+          metadata: true,
+        },
+      },
+    },
+  });
+}

@@ -40,7 +40,7 @@ import { groundAnswer } from "../lib/rag/answer-grounding.js";
 import { logRagEvent } from "../lib/rag/rag-log.js";
 import { buildChatSystemPrompt } from "../lib/rag/retrieve.js";
 import type { RagTrace, RagTraceStep } from "../lib/rag/rag-trace.js";
-import { logTraceStep } from "../lib/rag/rag-trace.js";
+import { isRagTraceEnabled, logTraceStep } from "../lib/rag/rag-trace.js";
 import { runRagPipeline } from "./rag-pipeline.service.js";
 import {
   createConversationRecord,
@@ -146,7 +146,15 @@ export async function getConversationMessagesForWorkspace(
     throw new NotFoundError("Conversation not found");
   }
 
-  return findMessagesByConversationId(conversationId);
+  const messages = await findMessagesByConversationId(conversationId);
+  if (isRagTraceEnabled()) {
+    return messages;
+  }
+
+  return messages.map((message) => ({
+    ...message,
+    trace: null,
+  }));
 }
 
 /**
@@ -317,6 +325,10 @@ export async function streamWorkspaceChat(
     execute: async ({ writer }) => {
       const publishTrace = (next: RagTrace) => {
         trace = next;
+        if (!isRagTraceEnabled()) {
+          return;
+        }
+
         writer.write({
           type: "data-rag",
           id: "rag-trace",
@@ -358,6 +370,9 @@ export async function streamWorkspaceChat(
         webResults: pipeline.webResults,
         contradictions: pipeline.contradictions,
         weakEvidence: pipeline.weakEvidence,
+        overview:
+          pipeline.queryClass === "summarization" &&
+          pipeline.chunks.length > 0,
       });
 
       const pushStep = (step: RagTraceStep) => {
@@ -371,6 +386,10 @@ export async function streamWorkspaceChat(
 
         trace = { steps };
         logTraceStep(step);
+        if (!isRagTraceEnabled()) {
+          return;
+        }
+
         writer.write({
           type: "data-rag",
           id: "rag-trace",
@@ -396,7 +415,7 @@ export async function streamWorkspaceChat(
         ? {
             web_search: tool({
               description:
-                "Search the web for up-to-date information outside the workspace sources. The result lists every web page for this reply as [W1], [W2], and so on. Cite those markers. They match the links shown to the user.",
+                "Search the web for up-to-date information outside the workspace sources. Cite the [W#] markers in the result. They continue any web results already in the prompt and match the links shown to the user.",
               inputSchema: z.object({
                 query: z
                   .string()
@@ -404,11 +423,20 @@ export async function streamWorkspaceChat(
               }),
               execute: async ({ query }) => {
                 const results = await searchWeb(query);
+                const before = webSearchResults?.results.length ?? 0;
                 webSearchResults = mergeWebSearchResults(
                   webSearchResults,
                   results,
                 );
-                return formatTavilyResultsForPrompt(webSearchResults);
+                const added = webSearchResults.results.slice(before);
+                if (added.length === 0) {
+                  return "No new web results were found. Keep citing the [W#] pages already listed.";
+                }
+
+                return formatTavilyResultsForPrompt(
+                  { ...webSearchResults, results: added },
+                  before,
+                );
               },
             }),
           }
@@ -482,15 +510,12 @@ export async function streamWorkspaceChat(
         });
 
         const policy = await checkOutputPolicy(grounded.text);
-        let released = policy.text;
-        const secrets = await checkOutputSecrets(released);
-        if (secrets.blocked) {
-          released = secrets.text;
-        }
+        const secrets = await checkOutputSecrets(policy.text);
+        const released = secrets.text;
 
         const quoteClaims =
           !policy.blocked &&
-          !secrets.blocked &&
+          secrets.text === policy.text &&
           (await outputSpansAreDisclosable(
             grounded.claims.map((claim) => claim.span).join("\n"),
           ));

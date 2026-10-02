@@ -1,8 +1,9 @@
 /**
  * Output guardrails for a drafted chat answer.
  *
- * PII is masked in place. Moderation and secret-key checks replace the whole
- * answer when they trip. Detected values are not returned for logs or the UI.
+ * PII is masked in place. A real credential is redacted in place. Moderation
+ * replaces the whole answer when it trips. Detected values are not returned
+ * for logs or the UI.
  */
 
 import { fileURLToPath } from "node:url";
@@ -24,9 +25,6 @@ export const OUTPUT_CHECK_FAILED_MESSAGE =
 
 export const OUTPUT_POLICY_MESSAGE =
   "Moderation: This answer wasn't shown because it contains content that isn't allowed.";
-
-export const OUTPUT_SECRET_MESSAGE =
-  "This answer was withheld because it contained sensitive credentials.";
 
 export type OutputGuardStep = {
   text: string;
@@ -192,13 +190,15 @@ export async function checkOutputPolicy(text: string): Promise<OutputGuardStep> 
 }
 
 /**
- * Blocks an answer that contains an API key or similar credential.
+ * Redacts an API key or similar credential and keeps the rest of the answer.
  *
- * Phone numbers are PII, not credentials. A phone that the PII step masks
- * leaves this step clear.
+ * Hyphenated words with no digits, such as `key-points`, and ordinary URLs
+ * are ignored. Phone numbers are PII, not credentials. A phone that the PII
+ * step masks leaves this step clear. Detected values are not included in the
+ * trace lines.
  *
  * @param text - Answer that may be released
- * @returns The same text, or a replacement when a credential is detected
+ * @returns The same text, or that text with each real credential replaced by `<SECRET>`
  * @throws When the check fails to run
  */
 export async function checkOutputSecrets(text: string): Promise<OutputGuardStep> {
@@ -210,7 +210,11 @@ export async function checkOutputSecrets(text: string): Promise<OutputGuardStep>
   const result = await guard.run({}, text);
   assertExecuted(result, "Secret Keys");
 
-  if (!result.tripwireTriggered) {
+  const secrets = secretValues(result.info).filter(
+    (token) => !isIgnorableSecret(token),
+  );
+
+  if (!result.tripwireTriggered || secrets.length === 0) {
     return {
       text,
       blocked: false,
@@ -219,17 +223,16 @@ export async function checkOutputSecrets(text: string): Promise<OutputGuardStep>
     };
   }
 
-  const count = secretCount(result.info);
+  const summary =
+    secrets.length === 1
+      ? "Masked 1 credential"
+      : `Masked ${secrets.length} credentials`;
 
   return {
-    text: OUTPUT_SECRET_MESSAGE,
-    blocked: true,
-    summary: "Blocked",
-    lines: [
-      count > 1
-        ? `Detected ${count} credentials.`
-        : "Detected 1 credential.",
-    ],
+    text: redactSecrets(text, secrets),
+    blocked: false,
+    summary,
+    lines: [`${summary}.`],
   };
 }
 
@@ -253,7 +256,58 @@ export async function outputSpansAreDisclosable(text: string) {
   }
 
   const secrets = await checkOutputSecrets(text);
-  return !secrets.blocked;
+  return secrets.text === text;
+}
+
+const SECRET_KEY_MARKERS = [
+  "sk-",
+  "sk_",
+  "pk_",
+  "pk-",
+  "ghp_",
+  "AKIA",
+  "xox",
+  "hf_",
+  "SG.",
+];
+
+/**
+ * Drops tokens the secret check flags that are ordinary words or links.
+ *
+ * A URL that itself contains a key marker is still treated as a credential.
+ */
+function isIgnorableSecret(token: string) {
+  if (/^[A-Za-z]+(?:-[A-Za-z]+)+$/.test(token)) {
+    return true;
+  }
+
+  if (/^https?:\/\//i.test(token)) {
+    return !SECRET_KEY_MARKERS.some((marker) => token.includes(marker));
+  }
+
+  return false;
+}
+
+function redactSecrets(text: string, secrets: string[]) {
+  const ordered = [...secrets].sort((left, right) => right.length - left.length);
+  let next = text;
+
+  for (const secret of ordered) {
+    next = next.split(secret).join("<SECRET>");
+  }
+
+  return next;
+}
+
+function secretValues(info: GuardrailResult["info"]) {
+  const secrets = info.detected_secrets;
+  if (!Array.isArray(secrets)) {
+    return [];
+  }
+
+  return secrets.filter(
+    (value): value is string => typeof value === "string" && value.length > 0,
+  );
 }
 
 const SUPPLEMENTAL_PHONE_PATTERNS = [
@@ -335,13 +389,4 @@ function flaggedCategories(info: GuardrailResult["info"]) {
   }
 
   return categories.filter((category): category is string => typeof category === "string");
-}
-
-function secretCount(info: GuardrailResult["info"]) {
-  const secrets = info.detected_secrets;
-  if (!Array.isArray(secrets) || secrets.length === 0) {
-    return 1;
-  }
-
-  return secrets.length;
 }

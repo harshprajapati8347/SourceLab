@@ -147,9 +147,9 @@ Hook: `useSignOut` (`hooks/use-sign-out.ts`). `app/(auth)/layout.tsx` is a split
 | `SourceStatusBanner` (`source-status-banner.tsx`) | Non-blocking strip above the composer for indexing or failed sources |
 | `ChatMessageBody` (`chat-message-body.tsx`) | Assistant Markdown with inline `CitationMarker`s |
 | `CitationMarker` (`citation-marker.tsx`) | Mono amber chip (`[1]`) with a hover `CitationPreview` |
-| `CitationPreview` (`citation-preview.tsx`) | Hover card: source, excerpt, open link, "Save to library" for web results (with toast) |
-| `CitationSources` (`citation-sources.tsx`) | Unique source chips under an assistant reply. Web chips link to the result URL and show the site host |
-| `RagTracePanel` (`rag-trace-panel.tsx`) | "How this answer was found" accordion above the reply, with expandable steps |
+| `CitationPreview` (`citation-preview.tsx`) | Hover card: source, excerpt, page when present, "Open passage" to `?chunk=`, "Save to library" for web results (with toast) |
+| `CitationSources` (`citation-sources.tsx`) | Unique source chips under an assistant reply. Workspace chips open the cited chunk. Web chips link to the result URL and show the site host |
+| `RagTracePanel` (`rag-trace-panel.tsx`) | "How this answer was found" accordion above the reply, with expandable steps. Rendered only when the server sends a trace (`RAG_TRACE_ENABLED=true`) |
 
 ### `features/learn/components/`
 | Component | Description |

@@ -146,6 +146,7 @@ export function CitationSources({
                           href={sourceRoutes.detail(
                             workspaceId,
                             citation.sourceId,
+                            citation.chunkId,
                           )}
                         />
                       }

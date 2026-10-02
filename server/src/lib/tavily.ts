@@ -89,15 +89,17 @@ export function mergeWebSearchResults(
 /**
  * Formats Tavily results into a prompt block for the chat model.
  *
- * Results are labeled `[W1]`, `[W2]`, etc. for inline citation in assistant replies.
+ * `startIndex` continues numbering for pages already shown. A later search
+ * passes the count of earlier results so the first new page is `[W3]` when
+ * two pages were already labeled `[W1]` and `[W2]`.
  *
  * @param response - Normalized Tavily search response
- * @returns Multi-line string injected into the tool result
- *
- *
+ * @param startIndex - How many web results already occupy earlier marker numbers
+ * @returns Multi-line string injected into the tool result or system prompt
  */
 export function formatTavilyResultsForPrompt(
   response: TavilySearchResponse,
+  startIndex = 0,
 ): string {
   if (response.results.length === 0) {
     return "No web results were found.";
@@ -105,10 +107,14 @@ export function formatTavilyResultsForPrompt(
 
   const blocks = response.results.map(
     (result, index) =>
-      `[W${index + 1}] ${result.title} (${result.url})\n${result.content}`,
+      `[W${startIndex + index + 1}] ${result.title} (${result.url})\n${result.content}`,
   );
 
-  const parts = ["Web search results:"];
+  const parts = [
+    startIndex > 0
+      ? `Additional web pages. The next marker is [W${startIndex + 1}]. Do not reuse earlier numbers.`
+      : "Web search results:",
+  ];
 
   if (response.answer) {
     parts.push(`Summary: ${response.answer}`);

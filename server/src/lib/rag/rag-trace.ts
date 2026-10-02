@@ -19,6 +19,15 @@ export type RagTrace = {
 };
 
 /**
+ * Whether the chat UI should receive the pipeline trace.
+ *
+ * Unset or any value other than `true` keeps the trace on the server only.
+ */
+export function isRagTraceEnabled() {
+  return process.env.RAG_TRACE_ENABLED === "true";
+}
+
+/**
  * Collects pipeline steps, logs each one, and notifies a listener with a snapshot.
  *
  * @param onChange - Called with a copy of the trace after every step

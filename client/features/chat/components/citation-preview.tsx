@@ -127,11 +127,15 @@ export function CitationPreview({
         </div>
       ) : citation.sourceId ? (
         <Link
-          href={sourceRoutes.detail(workspaceId, citation.sourceId)}
+          href={sourceRoutes.detail(
+            workspaceId,
+            citation.sourceId,
+            citation.chunkId,
+          )}
           className="inline-flex items-center gap-1.5 text-xs font-medium text-primary-ink underline-offset-4 hover:underline"
         >
           <ExternalLinkIcon className="size-3" />
-          Open source
+          Open passage
         </Link>
       ) : null}
     </div>

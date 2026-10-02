@@ -33,9 +33,11 @@ import { createRagTrace, type RagTrace, type RagTraceRecorder } from "../lib/rag
 import { logRagEvent } from "../lib/rag/rag-log.js";
 import {
   capChunks,
+  mergeOverviewChunks,
   mergeRetrievedChunks,
   retrieveMergedWorkspaceContext,
   retrieveWorkspaceContext,
+  selectOverviewChunks,
   type RetrievedChunk,
 } from "../lib/rag/retrieve.js";
 import {
@@ -44,7 +46,10 @@ import {
   type RetrievalQuality,
   type WebSnippet,
 } from "../lib/rag/retrieval-quality.js";
-import { findSourcesByIds } from "../repositories/source.repository.js";
+import {
+  findReadySourcesWithChunks,
+  findSourcesByIds,
+} from "../repositories/source.repository.js";
 import {
   searchWeb,
   type TavilySearchResponse,
@@ -191,6 +196,18 @@ export async function runRagPipeline(input: {
       }),
     ],
   });
+
+  if (plan.queryClass === "summarization") {
+    const overview = await finishOverview(
+      input.workspaceId,
+      plan,
+      retrieved,
+      trace,
+    );
+    if (overview) {
+      return overview;
+    }
+  }
 
   let enriched = await enrichChunks(input.workspaceId, retrieved);
   recordAuthority(trace, enriched);
@@ -371,6 +388,69 @@ export async function runRagPipeline(input: {
     webResults,
     queryClass: plan.queryClass,
     transforms,
+  });
+}
+
+/**
+ * Builds an overview from one opening passage per ready source, plus semantic hits.
+ *
+ * Returns null when no ready source has chunk text, so the caller can use the normal gate.
+ */
+async function finishOverview(
+  workspaceId: string,
+  plan: QueryPlan,
+  retrieved: RetrievedChunk[],
+  trace: RagTraceRecorder,
+): Promise<RagPipelineResult | null> {
+  const sources = await findReadySourcesWithChunks(workspaceId);
+  const overview = selectOverviewChunks(sources, RAG_CONTEXT_CHAR_BUDGET);
+  if (overview.chunks.length === 0) {
+    return null;
+  }
+
+  const merged = mergeOverviewChunks(overview.chunks, retrieved);
+  const enriched = await enrichChunks(workspaceId, merged);
+  recordAuthority(trace, enriched);
+  trace.step({
+    id: "overview",
+    label: "Overview",
+    status: "done",
+    summary: `${overview.pinnedIds.length} ${overview.pinnedIds.length === 1 ? "source" : "sources"} sampled`,
+    lines: overview.chunks.map((chunk) =>
+      chunk.page
+        ? `${chunk.sourceTitle}, page ${chunk.page}`
+        : chunk.sourceTitle,
+    ),
+  });
+  trace.step({
+    id: "crag",
+    label: "CRAG",
+    status: "done",
+    summary: "Not used for an overview",
+    lines: [
+      "Overview questions use a passage from each ready source.",
+      "A low similarity score does not start another search.",
+    ],
+  });
+
+  const compressed = compressChunks(
+    enriched,
+    new Set(overview.pinnedIds),
+    RAG_CONTEXT_CHAR_BUDGET,
+  );
+  const removed = enriched.filter(
+    (chunk) => !compressed.some((kept) => kept.chunkId === chunk.chunkId),
+  );
+  recordContext(trace, enriched, compressed, removed, []);
+
+  return finish(trace, {
+    chunks: compressed,
+    contradictions: [],
+    gateScore: 1,
+    weakEvidence: false,
+    webResults: null,
+    queryClass: plan.queryClass,
+    transforms: plan.transforms,
   });
 }
 

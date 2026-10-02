@@ -177,12 +177,10 @@ runRagPipeline():
 streamWorkspaceChat() continues:
   - buildChatSystemPrompt() from compressed chunks, authority metadata, conflicts,
     memories, summary, weak-evidence note, and any corrective web results
-  - the same steps are logged as `[rag]` console lines and streamed as a `data-rag` message part
-  - streamText() (AI SDK) with optional web_search tool (Tavily) runs on the server
-  - output guardrails then mask PII, score claims against the retrieved chunks and web
-    snippets, and run moderation plus secret-key checks
-  - only the safe text is written to the UI stream, with coverage and each decision
-    added to the same `data-rag` trace
+  - the same steps are logged as `[rag]` console lines. They are streamed as a `data-rag` part only when `RAG_TRACE_ENABLED=true`
+  - streamText() (AI SDK) with optional web_search tool (Tavily) runs on the server. Later web searches append to the same `[W#]` list
+  - output guardrails then mask PII, keep cited paraphrases, redact real credentials in place, and run moderation
+  - only the safe text is written to the UI stream, with citations. Coverage is added to the trace when that trace is enabled
   - onFinish: save that safe assistant Message + citations (workspace chunks and web
               results, excerpts masked, `cited` set from markers that remain),
               touch conversation, auto-title if new,

@@ -163,6 +163,7 @@ export function buildChatSystemPrompt(input: {
   webResults?: TavilySearchResponse | null;
   contradictions?: Contradiction[];
   weakEvidence?: boolean;
+  overview?: boolean;
 }) {
   const sections: string[] = [
     "You are SourceLab, an assistant that helps users learn from their workspace sources.",
@@ -231,16 +232,29 @@ export function buildChatSystemPrompt(input: {
     })
     .join("\n\n");
 
+  if (input.overview) {
+    sections.push(
+      "The user asked for an overview of their sources.",
+      "Summarize only the retrieved passages.",
+      "Write one sentence per point, and put that passage's citation marker in the same sentence.",
+      "Do not say the sources have no summary when passages were retrieved.",
+    );
+  }
+
   sections.push(
     input.webSearchEnabled
       ? "Use the workspace context below for the user's materials. For facts outside that context, call web_search and cite the page with its [W#] marker."
       : "Use ONLY the retrieved context below when making factual claims about their materials.",
-    "If the context is insufficient, say so clearly.",
+    input.overview
+      ? "Every point must come from the retrieved passages below."
+      : "If the context is insufficient, say so clearly.",
     "Cite sources inline using [1], [2], etc. matching the numbered context blocks.",
     "Write each factual claim as its own sentence, with its citation marker in that sentence.",
-    input.webSearchEnabled
-      ? "If a requested detail is not in the workspace context, search the web before saying it is missing."
-      : "If a requested detail is not stated in the retrieved context, say that it is not in the sources in its own sentence.",
+    input.overview
+      ? "If a point is not in the retrieved passages, leave it out."
+      : input.webSearchEnabled
+        ? "If a requested detail is not in the workspace context, search the web before saying it is missing."
+        : "If a requested detail is not stated in the retrieved context, say that it is not in the sources in its own sentence.",
     "Do not infer, guess, or fill in missing details.",
     "Keep answers concise, accurate, and educational.",
     "",
@@ -370,6 +384,140 @@ function chunksFromMatches(
   }
 
   return chunks;
+}
+
+export type OverviewChunk = {
+  id: string;
+  index: number;
+  content: string;
+  metadata: unknown;
+};
+
+export type OverviewSource = {
+  id: string;
+  title: string;
+  type: string;
+  chunks: OverviewChunk[];
+};
+
+/**
+ * Picks a spread of passages for a summary: the opening chunk of each source, then more until the budget.
+ *
+ * The opening chunk of each source is always included. Later chunks are added only while they fit.
+ *
+ * @param sources - Ready sources with chunks in index order
+ * @param budget - Character budget for chunks after the opening passage of each source
+ * @returns Selected chunks and the opening chunk ids that must survive compression
+ */
+export function selectOverviewChunks(sources: OverviewSource[], budget: number) {
+  const groups = sources
+    .map((source) => ({
+      source,
+      chunks: source.chunks.filter((chunk) => chunk.content.trim().length > 0),
+    }))
+    .filter((group) => group.chunks.length > 0);
+
+  const selected: RetrievedChunk[] = [];
+  const pinnedIds: string[] = [];
+  let used = 0;
+
+  for (const group of groups) {
+    const first = group.chunks[0];
+    if (!first) {
+      continue;
+    }
+
+    selected.push(toOverviewChunk(group.source, first));
+    pinnedIds.push(first.id);
+    used += first.content.length;
+  }
+
+  let round = 1;
+  let added = true;
+
+  while (added) {
+    added = false;
+
+    for (const group of groups) {
+      const chunk = group.chunks[round];
+      if (!chunk) {
+        continue;
+      }
+
+      if (used >= budget || used + chunk.content.length > budget) {
+        continue;
+      }
+
+      selected.push(toOverviewChunk(group.source, chunk));
+      used += chunk.content.length;
+      added = true;
+    }
+
+    round += 1;
+  }
+
+  return { chunks: selected, pinnedIds };
+}
+
+/**
+ * Keeps overview passages first, then semantic hits that are not already included.
+ *
+ * When the same chunk appears in both lists, the higher similarity score is kept.
+ *
+ * @param overview - Passages sampled across sources
+ * @param semantic - Chunks from vector search
+ * @returns One list, overview order first
+ */
+export function mergeOverviewChunks(
+  overview: RetrievedChunk[],
+  semantic: RetrievedChunk[],
+) {
+  const semanticById = new Map(
+    semantic.map((chunk) => [chunk.chunkId, chunk]),
+  );
+  const seen = new Set<string>();
+  const merged: RetrievedChunk[] = [];
+
+  for (const chunk of overview) {
+    const hit = semanticById.get(chunk.chunkId);
+    merged.push(hit && hit.score > chunk.score ? hit : chunk);
+    seen.add(chunk.chunkId);
+  }
+
+  for (const chunk of semantic) {
+    if (seen.has(chunk.chunkId)) {
+      continue;
+    }
+
+    merged.push(chunk);
+    seen.add(chunk.chunkId);
+  }
+
+  return merged;
+}
+
+function toOverviewChunk(source: OverviewSource, chunk: OverviewChunk): RetrievedChunk {
+  const page = pageFromMetadata(chunk.metadata);
+
+  return {
+    sourceId: source.id,
+    sourceTitle: source.title,
+    sourceType: source.type,
+    chunkId: chunk.id,
+    chunkIndex: chunk.index,
+    ...(page !== undefined ? { page } : {}),
+    text: chunk.content,
+    score: RAG_MIN_SCORE,
+  };
+}
+
+function pageFromMetadata(metadata: unknown) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return undefined;
+  }
+
+  const page = (metadata as { page?: unknown }).page;
+  return typeof page === "number" ? page : undefined;
 }
 
 function uniqueQueries(queries: string[]) {

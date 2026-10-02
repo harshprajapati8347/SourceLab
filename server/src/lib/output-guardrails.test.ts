@@ -61,13 +61,24 @@ describe("PII and sensitive data", () => {
     assert.doesNotMatch(secrets.lines.join(" "), /98765/);
   });
 
-  it("still blocks an API key as sensitive data", async () => {
+  it("redacts an API key and keeps the rest of the sentence", async () => {
     const result = await checkOutputSecrets(
       "Use sk-proj-abcdefghijklmnopqrstuvwxyz1234567890 now.",
     );
 
-    assert.equal(result.blocked, true);
-    assert.match(result.text, /sensitive credentials/);
+    assert.equal(result.blocked, false);
+    assert.match(result.text, /^Use <SECRET> now\.$/);
+    assert.doesNotMatch(result.text, /sk-proj/);
+    assert.match(result.summary, /Masked 1 credential/);
     assert.doesNotMatch(result.lines.join(" "), /sk-proj/);
+  });
+
+  it("leaves a hyphenated word such as key-points in place", async () => {
+    const text = "The key-points are listed in the notes.";
+    const result = await checkOutputSecrets(text);
+
+    assert.equal(result.blocked, false);
+    assert.equal(result.text, text);
+    assert.equal(result.summary, "None detected");
   });
 });

@@ -1,13 +1,16 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { ArrowLeftIcon, ExternalLinkIcon, RefreshCwIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { ApiError } from "@/shared/lib/api";
-import { useReprocessSource, useSource } from "../hooks/use-sources";
+import { useReprocessSource, useSource, useSourceChunks } from "../hooks/use-sources";
+import type { SourceChunk } from "../lib/types";
 import { SOURCE_TYPE_LABELS } from "../lib/constants";
 import { sourceRoutes } from "../lib/routes";
 import { MarkdownPreview } from "./markdown-preview";
@@ -21,12 +24,33 @@ type SourceDetailProps = {
 
 const PAGE = "mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 p-4 md:p-8";
 
+function pageOf(chunk: SourceChunk) {
+  const page = chunk.metadata?.page;
+  return typeof page === "number" ? page : null;
+}
+
 export function SourceDetail({ workspaceId, sourceId }: SourceDetailProps) {
+  const searchParams = useSearchParams();
+  const chunkId = searchParams.get("chunk");
   const { data: source, isLoading, error, refetch } = useSource(
     workspaceId,
     sourceId,
   );
+  const chunks = useSourceChunks(workspaceId, sourceId, Boolean(chunkId));
+  const focus = chunkId
+    ? (chunks.data?.chunks.find((chunk) => chunk.id === chunkId) ?? null)
+    : null;
   const reprocess = useReprocessSource(workspaceId);
+
+  useEffect(() => {
+    if (!focus) {
+      return;
+    }
+
+    document.getElementById("cited-passage")?.scrollIntoView({
+      block: "start",
+    });
+  }, [focus]);
 
   if (isLoading) {
     return (
@@ -119,6 +143,27 @@ export function SourceDetail({ workspaceId, sourceId }: SourceDetailProps) {
           </p>
         </div>
       </div>
+
+      {chunkId && chunks.isLoading ? (
+        <Skeleton className="h-28 w-full rounded-xl" />
+      ) : focus ? (
+        <section
+          id="cited-passage"
+          className="scroll-mt-20 space-y-2 rounded-xl border border-primary/40 bg-card p-4"
+        >
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="font-heading text-sm font-semibold">Cited passage</h2>
+            {pageOf(focus) ? (
+              <p className="text-xs text-muted-foreground">
+                Page {pageOf(focus)}
+              </p>
+            ) : null}
+          </div>
+          <p className="whitespace-pre-wrap text-sm leading-relaxed">
+            {focus.content}
+          </p>
+        </section>
+      ) : null}
 
       {source.url ? (
         <a

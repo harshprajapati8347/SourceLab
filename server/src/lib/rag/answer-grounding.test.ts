@@ -173,4 +173,102 @@ describe("citation coverage", () => {
       result.citations.lines.some((line) => line.includes("no citation")),
     );
   });
+
+  it("keeps a paraphrase whose first word is capitalized", () => {
+    const result = settleGrounding(
+      "Retrieved passages describe billing [1].",
+      [
+        {
+          span: "Retrieved passages describe billing [1].",
+          citations: ["1"],
+          supported: false,
+        },
+      ],
+      new Map([["1", "The notes describe billing for each workspace."]]),
+    );
+
+    assert.match(result.text, /Retrieved passages describe billing/);
+    assert.equal(result.withheld, false);
+    assert.equal(result.verdict, "SUPPORTED");
+  });
+
+  it("keeps a paraphrased web sentence when that snippet was retrieved", () => {
+    const result = settleGrounding(
+      "Customers pay for the time they use [W1].",
+      [
+        {
+          span: "Customers pay for the time they use [W1].",
+          citations: ["W1"],
+          supported: false,
+        },
+      ],
+      new Map([["W1", "AWS bills customers for the hours they use."]]),
+    );
+
+    assert.match(result.text, /Customers pay for the time they use \[W1\]/);
+    assert.equal(result.withheld, false);
+  });
+
+  it("removes a number the cited passage does not contain", () => {
+    const result = settleGrounding(
+      "The total is 42 [1].",
+      [
+        {
+          span: "The total is 42 [1].",
+          citations: ["1"],
+          supported: true,
+        },
+      ],
+      new Map([["1", "Billing is described in the notes."]]),
+    );
+
+    assert.equal(result.text, UNSUPPORTED_SOURCES_MESSAGE);
+    assert.equal(result.withheld, true);
+  });
+
+  it("keeps a cited sentence when its span whitespace differs", () => {
+    const result = settleGrounding(
+      "The email is ada@example.com [1]. The customer is in Pune [1].",
+      [
+        {
+          span: "The email is  ada@example.com [1].",
+          citations: ["1"],
+          supported: true,
+        },
+        {
+          span: "The customer is in Pune [1].",
+          citations: ["1"],
+          supported: true,
+        },
+      ],
+      contactEvidence,
+    );
+
+    assert.match(result.text, /ada@example.com/);
+    assert.doesNotMatch(result.text, /Pune/);
+    assert.equal(result.withheld, false);
+  });
+
+  it("matches a claim span when only whitespace differs", () => {
+    const result = settleGrounding(
+      "The email is ada@example.com [1]. The customer is in Pune [1].",
+      [
+        {
+          span: "The email is ada@example.com [1].",
+          citations: ["1"],
+          supported: true,
+        },
+        {
+          span: "The customer is in  Pune [1].",
+          citations: ["1"],
+          supported: true,
+        },
+      ],
+      contactEvidence,
+    );
+
+    assert.match(result.text, /ada@example.com/);
+    assert.doesNotMatch(result.text, /Pune/);
+    assert.equal(result.withheld, false);
+  });
 });

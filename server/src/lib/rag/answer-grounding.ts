@@ -75,8 +75,9 @@ const JUDGE_SYSTEM = [
   "Do not return a statement whose only point is that a detail is missing, unknown, or not in the sources.",
   "Each span must be an exact copy of one sentence from the answer, including its citation marker.",
   'citations are the markers in that sentence, such as "1" or "W1", without brackets.',
-  "supported is true only when the cited passage states that specific fact.",
-  "A citation to a related passage is not enough when the passage does not contain the claimed detail.",
+  "supported is true when the cited passage states that fact, including a faithful paraphrase of a workspace passage or web snippet.",
+  "supported is false when the sentence adds a name, number, date, or other detail the passage does not state.",
+  "A citation to a related passage is not enough when the passage does not contain the claimed name, number, or date.",
   "A claim with no citation is not supported.",
   "Return one claim for each distinct fact. Do not repeat the same fact in another wording.",
   "Do not add claims that are not in the answer.",
@@ -148,11 +149,14 @@ export async function groundAnswer(input: {
 /**
  * Applies marker checks and removes unsupported sentences.
  *
- * The verdict is computed here. A claim the judge marks supported is still
- * unsupported when its marker is missing, or when the cited passage does not
- * contain the claimed email, phone number, or name. Statements that a detail
- * is missing stay in the answer and are not counted as claims. Repeated
- * wording of the same fact counts once.
+ * The verdict is computed here. A claim is unsupported when its marker is
+ * missing, or when the cited passage does not contain the claimed email,
+ * phone number, number, or a name later in the sentence. A faithful paraphrase
+ * that cites a retrieved passage is kept. The first capitalized word of a
+ * sentence is not treated as a name. Statements that a detail is missing stay
+ * in the answer and are not counted as claims. Repeated wording of the same
+ * fact counts once. The whole reply is replaced only when it cites nothing
+ * that was retrieved.
  *
  * @param answer - Draft after PII masking
  * @param claims - Exact spans returned by the judge
@@ -176,7 +180,12 @@ export function settleGrounding(
   const supported = meaningful.filter((claim) => claim.supported);
   const unsupported = meaningful.filter((claim) => !claim.supported);
   const verdict = verdictFor(supported.length, meaningful.length);
-  const released = releaseText(answer, supported, unsupported);
+  const released = releaseText(
+    answer,
+    supported,
+    unsupported,
+    new Set(evidence.keys()),
+  );
   const coverageSummary = formatCitationCoverage(
     supported.length,
     meaningful.length,
@@ -277,7 +286,7 @@ function classifyClaim(
   }
 
   const cited = markers.map((marker) => evidence.get(marker) ?? "").join("\n");
-  if (!claim.supported || !citedTextSupports(claim.span, cited)) {
+  if (!citedTextSupports(claim.span, cited)) {
     return {
       span: claim.span,
       supported: false,
@@ -344,6 +353,7 @@ function releaseText(
   answer: string,
   supported: MeaningfulClaim[],
   unsupported: MeaningfulClaim[],
+  evidenceMarkers: ReadonlySet<string>,
 ) {
   const removals = [...supported, ...unsupported].flatMap(
     (claim) => claim.removeSpans,
@@ -359,6 +369,10 @@ function releaseText(
     supported.map((claim) => claim.span),
   );
   if (stripped.unlocatable) {
+    if (citesRetrievedEvidence(answer, evidenceMarkers)) {
+      return { text: answer, withheld: false, unlocatable: true };
+    }
+
     return {
       text: UNSUPPORTED_SOURCES_MESSAGE,
       withheld: true,
@@ -371,6 +385,10 @@ function releaseText(
       return { text: stripped.text, withheld: false, unlocatable: false };
     }
 
+    if (citesRetrievedEvidence(stripped.text, evidenceMarkers)) {
+      return { text: stripped.text, withheld: false, unlocatable: false };
+    }
+
     return {
       text: UNSUPPORTED_SOURCES_MESSAGE,
       withheld: true,
@@ -378,12 +396,26 @@ function releaseText(
     };
   }
 
-  const kept = supported.every((claim) => stripped.text.includes(claim.span));
-  if (!kept || !hasWords(stripped.text)) {
+  const kept = supported.every(
+    (claim) => locateSpan(stripped.text, claim.span, []) !== null,
+  );
+  if (!hasWords(stripped.text)) {
     return {
       text: UNSUPPORTED_SOURCES_MESSAGE,
       withheld: true,
-      unlocatable: !kept,
+      unlocatable: false,
+    };
+  }
+
+  if (!kept) {
+    if (citesRetrievedEvidence(stripped.text, evidenceMarkers)) {
+      return { text: stripped.text, withheld: false, unlocatable: true };
+    }
+
+    return {
+      text: UNSUPPORTED_SOURCES_MESSAGE,
+      withheld: true,
+      unlocatable: true,
     };
   }
 
@@ -404,7 +436,9 @@ function groundingStep(
     );
   } else if (verdict === "UNSUPPORTED") {
     lines.push(
-      `${total} ${total === 1 ? "claim is" : "claims are"} not supported, so the answer was withheld.`,
+      released.withheld
+        ? `${total} ${total === 1 ? "claim is" : "claims are"} not supported, so the answer was withheld.`
+        : `${total} ${total === 1 ? "claim is" : "claims are"} not supported.`,
     );
   } else {
     lines.push(
@@ -414,7 +448,9 @@ function groundingStep(
 
   if (released.unlocatable) {
     lines.push(
-      "The answer was withheld because an unsupported claim was not an exact sentence in the reply.",
+      released.withheld
+        ? "The answer was withheld because an unsupported claim was not an exact sentence in the reply."
+        : "An unsupported claim was not an exact sentence, so the cited reply was kept.",
     );
   }
 
@@ -509,18 +545,31 @@ function distinctiveTokens(span: string) {
     .map((match) => match[0].replace(/\D/g, ""))
     .filter((digits) => digits.length >= 8)
     .map((digits) => digits.slice(-10));
+  const numbers = [...plain.matchAll(/\d[\d,]*/g)]
+    .map((match) => match[0].replace(/\D/g, ""))
+    .filter((digits) => digits.length >= 2);
   const nouns = properNouns(plain).map((noun) => noun.toLowerCase());
 
-  return [...new Set([...emails, ...phones, ...nouns])];
+  return [...new Set([...emails, ...phones, ...numbers, ...nouns])];
 }
 
 function properNouns(span: string) {
   const nouns: string[] = [];
   const words = span.split(/\s+/);
+  let skippedFirstWord = false;
 
   for (const word of words) {
     const clean = word.replace(/[^A-Za-z]/g, "");
     const lower = clean.toLowerCase();
+    if (clean.length === 0) {
+      continue;
+    }
+
+    if (!skippedFirstWord) {
+      skippedFirstWord = true;
+      continue;
+    }
+
     if (
       clean.length < 3 ||
       FIELD_LABELS.has(lower) ||
@@ -542,7 +591,7 @@ function evidenceHasToken(token: string, evidenceText: string) {
     return evidenceText.toLowerCase().includes(token);
   }
 
-  if (/^\d{8,}$/.test(token)) {
+  if (/^\d+$/.test(token)) {
     return evidenceText.replace(/\D/g, "").includes(token);
   }
 
@@ -561,24 +610,24 @@ function removeClaimSpans(
   const ranges: SpanRange[] = [];
 
   for (const span of protectedSpans) {
-    const start = locateSpan(answer, span, ranges);
-    if (start !== -1) {
-      ranges.push({ start, end: start + span.length });
+    const found = locateSpan(answer, span, ranges);
+    if (found) {
+      ranges.push(found);
     }
   }
 
   const protectedCount = ranges.length;
 
   for (const removal of removals) {
-    const start = locateSpan(answer, removal.span, ranges);
-    if (start === -1) {
+    const found = locateSpan(answer, removal.span, ranges);
+    if (!found) {
       if (removal.required) {
         return { text: answer, unlocatable: true };
       }
       continue;
     }
 
-    ranges.push({ start, end: start + removal.span.length });
+    ranges.push(found);
   }
 
   const removable = ranges.slice(protectedCount);
@@ -595,26 +644,64 @@ function normalizeMarker(value: string) {
 }
 
 function locateSpan(text: string, span: string, taken: SpanRange[]) {
+  const exact = findLiteral(text, span, taken);
+  if (exact) {
+    return exact;
+  }
+
+  const words = span
+    .trim()
+    .split(/\s+/)
+    .filter((word) => word.length > 0);
+  if (words.length === 0) {
+    return null;
+  }
+
+  const pattern = new RegExp(words.map(escapeRegExp).join("\\s+"), "g");
+  for (const match of text.matchAll(pattern)) {
+    const start = match.index;
+    if (start === undefined) {
+      continue;
+    }
+
+    const found = { start, end: start + match[0].length };
+    if (!overlapsRange(found, taken)) {
+      return found;
+    }
+  }
+
+  return null;
+}
+
+function findLiteral(text: string, span: string, taken: SpanRange[]) {
   let from = 0;
 
   while (from < text.length) {
     const start = text.indexOf(span, from);
     if (start === -1) {
-      return -1;
+      return null;
     }
 
-    const end = start + span.length;
-    const overlaps = taken.some(
-      (range) => start < range.end && end > range.start,
-    );
-    if (!overlaps) {
-      return start;
+    const found = { start, end: start + span.length };
+    if (!overlapsRange(found, taken)) {
+      return found;
     }
 
     from = start + 1;
   }
 
-  return -1;
+  return null;
+}
+
+function overlapsRange(found: SpanRange, taken: SpanRange[]) {
+  return taken.some((range) => found.start < range.end && found.end > range.start);
+}
+
+function citesRetrievedEvidence(text: string, evidenceMarkers: ReadonlySet<string>) {
+  return [...text.matchAll(/\[(W?\d+)\]/g)].some((match) => {
+    const marker = match[1] ? normalizeMarker(match[1]) : null;
+    return marker !== null && evidenceMarkers.has(marker);
+  });
 }
 
 function removeRanges(text: string, ranges: SpanRange[]) {

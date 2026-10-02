@@ -93,7 +93,7 @@ The source library UI polls sources with pending/processing status every 3 secon
 - Each user message is classified, then retrieved from Pinecone, in parallel with a Mem0 search over the user's memories. Simple factual and ambiguous questions also retrieve with a hypothetical passage. Multi-hop, analytical, and comparative questions retrieve several queries in parallel and merge chunks by id
 - Retrieved chunks are scored for relevance, coverage, freshness, authority, and duplication. A score below 0.55 rewrites and retrieves once more. If the user already enabled web search, that pass can also call Tavily
 - Before the prompt is built, near-duplicate chunks are dropped and the remaining text is capped. Conflicting sources are kept, with authority and indexed time, so the model can prefer the newer or more authoritative one
-- Each of those steps is logged on the server and shown above the answer. A finished step can be opened to see the rewrite, hypothetical passage, retrieved chunks, quality scores, and CRAG decision
+- Each of those steps is logged on the server. The "How this answer was found" panel is shown only when `RAG_TRACE_ENABLED=true`. A finished step can be opened to see the rewrite, hypothetical passage, retrieved chunks, quality scores, and CRAG decision
 - The system prompt is built from those chunks, conversation summary (if any), user memories, and web-search availability
 - Optional **web search** toggle exposes a `web_search` tool (Tavily) the model can call for up-to-date information outside the workspace
 - Responses cite sources inline (`[1]`, `[2]`, …) and web results (`[W1]`, `[W2]`, …); citations render as hoverable source cards linking back to the source detail page or the external URL
