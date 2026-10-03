@@ -11,13 +11,14 @@ import type { CreateMemoryInput, UpdateMemoryInput } from "../lib/types";
 
 export const memoryKeys = {
   all: ["memory"] as const,
-  list: () => ["memory", "list"] as const,
+  list: (workspaceId?: string | null) =>
+    ["memory", "list", workspaceId ?? "user"] as const,
 };
 
-export function useMemories() {
+export function useMemories(workspaceId?: string | null) {
   return useQuery({
-    queryKey: memoryKeys.list(),
-    queryFn: listMemories,
+    queryKey: memoryKeys.list(workspaceId),
+    queryFn: () => listMemories(workspaceId ?? undefined),
   });
 }
 
@@ -39,10 +40,12 @@ export function useUpdateMemory() {
     mutationFn: ({
       memoryId,
       input,
+      workspaceId,
     }: {
       memoryId: string;
       input: UpdateMemoryInput;
-    }) => updateMemory(memoryId, input),
+      workspaceId?: string | null;
+    }) => updateMemory(memoryId, input, workspaceId ?? undefined),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: memoryKeys.all });
     },
@@ -53,7 +56,13 @@ export function useDeleteMemory() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (memoryId: string) => deleteMemory(memoryId),
+    mutationFn: ({
+      memoryId,
+      workspaceId,
+    }: {
+      memoryId: string;
+      workspaceId?: string | null;
+    }) => deleteMemory(memoryId, workspaceId ?? undefined),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: memoryKeys.all });
     },

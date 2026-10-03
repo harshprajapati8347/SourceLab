@@ -5,6 +5,7 @@ import {
   type WorkspaceRecord,
 } from "../repositories/workspace.repository.js";
 import { deleteWorkspaceVectors } from "../lib/pinecone.js";
+import { deleteMemoriesForWorkspace } from "./memory.service.js";
 import { NotFoundError } from "../types/app-error.js";
 import type { UpdateWorkspaceInput } from "../validators/workspace.validator.js";
 
@@ -51,9 +52,9 @@ export async function updateWorkspaceForUser(
 }
 
 /**
- * Deletes a workspace and its Pinecone vector namespace.
+ * Deletes a workspace, its Pinecone namespace, and its notebook memories.
  *
- * Pinecone cleanup is best-effort: deletion continues even if vector removal fails.
+ * Pinecone and Mem0 cleanup are best-effort: deletion continues if either fails.
  *
  * @param workspaceId - Workspace to delete
  * @param userId - Authenticated user's id
@@ -71,6 +72,12 @@ export async function deleteWorkspaceForUser(
     await deleteWorkspaceVectors(workspaceId);
   } catch (error) {
     console.error("Failed to delete Pinecone namespace:", error);
+  }
+
+  try {
+    await deleteMemoriesForWorkspace(userId, workspaceId);
+  } catch (error) {
+    console.error("Failed to delete workspace memories:", error);
   }
 
   await deleteWorkspaceRecord(workspaceId);

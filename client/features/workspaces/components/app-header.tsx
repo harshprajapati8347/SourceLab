@@ -4,6 +4,7 @@ import Link from "next/link";
 import { SearchIcon } from "lucide-react";
 import { UserMenu } from "@/features/auth/components/user-menu";
 import { CreditsBadge } from "@/features/billing/components/credits-badge";
+import { MemoryMenu } from "@/features/memory/components/memory-menu";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { cn } from "@/lib/utils";
@@ -59,6 +60,7 @@ export function AppHeader({ innerClassName }: AppHeaderProps) {
             <SearchIcon />
           </Button>
           <CreditsBadge className="hidden sm:inline-flex" />
+          <MemoryMenu hideLabelBelow="sm" />
           <UserMenu />
         </div>
       </div>

@@ -7,7 +7,7 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 ## Current Status
 
 **Phase:** Auth (Google + email/password), workspaces, sources/RAG, chat with query and context intelligence, learning artifacts, memory, billing (Stripe Pro) + credits.
-**Last completed:** Global top progress bar on client pathname changes (links, programmatic push/replace, back/forward). In-page skeletons and button spinners are unchanged.
+**Last completed:** User memory and notebook memory. User memory is recalled in every notebook; notebook memory stays in the workspace where it was saved or learned.
 **Next:** Operator setup — Resend domain, Stripe test Product/Price (`STRIPE_PRO_PRICE_ID`), webhook to Express `/api/auth/stripe/webhook`. See `context/billing-and-credits.md`.
 
 ---
@@ -36,6 +36,8 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 
 ### App chrome
 - [x] Global top progress bar while a client navigation changes the pathname. Same-pathname updates (including chat stripping `?ask=`) do not start it
+- [x] Below `md`, a same-tab link in the left sidebar or sources sheet closes both mobile sheets. The desktop sidebar and persisted sources panel stay as they were
+- [x] Memory menu in the top bar on the dashboard and inside a notebook. It opens all memories, memories you added, and memories learned from chat
 
 ### Sources
 - [x] Five ingestion types: Text, Markdown, PDF upload (Cloudinary), Website (Firecrawl), YouTube (transcript)
@@ -53,7 +55,7 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 - [x] Model selection per workspace (`gpt-4o-mini` / `gpt-4o`), persisted client-side per workspace
 - [x] Optional web search tool (Tavily), with `[W#]` citations
 - [x] Rolling conversation summarization every 8 messages, feeding both the chat context window and Mem0
-- [x] Mem0 long-term memory: recalled into chat context, auto-learned from conversations
+- [x] Mem0 long-term memory: user memory and the current notebook's memory are recalled into chat. Chat learning is stored on the notebook
 - [x] Conversation delete, "new chat", markdown export
 - [x] Opening a notebook resumes its latest chat. A new chat is created only from New Chat, or when the notebook has no chats
 - [x] A conversation stops at 10 stored messages and asks the user to start a new chat. The server rejects the next turn before retrieval or credit deduction
@@ -73,8 +75,10 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 - [x] Artifact list with status/type badges, delete
 
 ### Memory
-- [x] Cross-workspace personal memory via Mem0 (manual create/edit/delete + auto-learned)
-- [x] Memory settings page with source/category badges
+- [x] User memory via Mem0, recalled in every notebook (manual create/edit/delete on `/settings/memory`)
+- [x] Notebook memory via Mem0, isolated to one workspace. Chat learning is stored here. `?workspaceId=` lists and edits it. Deleting a notebook deletes these memories
+- [x] Existing rows with no scope are stamped once: a conversation that still belongs to the user becomes notebook memory; every other row becomes user memory
+- [x] Memory settings page with source/category badges. The top-bar menu can show only memories you added (`?source=manual`) or only ones learned from chat (`?source=learned`), in either scope. Inside a notebook the menu also links to that notebook's memory
 
 ### UI / Design System
 - [x] Tailwind v4 token system (`@theme inline`, oklch colors, radius scale) — no `tailwind.config.ts`
@@ -138,6 +142,7 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 
 - **Amber is a fill, not a text colour** — `text-primary-ink` carries amber text so light mode keeps AA contrast. The docs' hard-coded hex values, forced dark theme, Clerk, and ChaibookLM-only features (favorites, archive, admin logs, podcast, dashboard storage stats) were not copied.
 - **Chat is never gated by indexing** — the docs lock chat until every source is ready. SourceLab keeps the composer enabled and shows `SourceStatusBanner` instead, since the backend answers from whatever is already indexed.
+- **Memory is a top-bar menu** — `MemoryMenu` sits after credits on the dashboard and in the notebook header. The word is hidden below `sm` on the dashboard and below `md` in a notebook so the row does not overflow; the control stays named Memory. Account menu and the command palette still link to the same page. The source filter is a page `searchParams` prop, not a second fetch.
 - **Top progress bar is pathname navigation only** — a 2px `bg-primary` bar fixed to the viewport (`NavigationProgress`). It starts on `next/link`, `useAppRouter` push/replace, and back/forward, waits 150ms so fast navigations stay invisible, trickles until `usePathname()` changes, and gives up after 8s if the route never commits. Skeletons, spinners, toasts, polling, and chat streaming are not wired to it. `components/ui/progress.tsx` stays the unused form control.
 - **A notebook opens its latest chat** — reload, returning from Sources, and other navigation do not start a conversation. New Chat, or the first message when the notebook has no chats, is what creates one. At 10 stored messages (user and assistant) the composer stops, and the API rejects another turn before retrieval or a credit charge.
 - **Web search toggle reads `byWorkspace`** — selecting `getPrefs` does not re-render, because that function identity never changes. The first paint stays off until persistence hydrates, so the server HTML matches. The send body reads the same store when the message is sent. Cited web pages are streamed as `data-citations` with the reply, and each `[W#]` matches the merged result list.

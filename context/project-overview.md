@@ -6,7 +6,7 @@ SourceLab is a full stack "chat with your documents" application — a NotebookL
 
 - Chat with an AI assistant that answers questions grounded in the workspace's sources, with inline citations back to the exact chunk (and page, for PDFs) the answer came from
 - Generate "learning tools" (**artifacts**) from the sources — summaries, key takeaways, flashcards, quizzes, mind maps, and long-form reports
-- Build up a personal, cross-workspace long-term memory (via Mem0) that the assistant recalls in future conversations
+- Build up long-term memory (via Mem0): **user memory** recalled in every notebook, and **notebook memory** that stays inside the notebook where it was saved or learned
 
 The backend is a standalone Express API (`server/`) and the frontend is a Next.js 16 App Router client (`client/`), talking to each other over HTTP with cookie-based sessions.
 
@@ -28,7 +28,7 @@ Reading through long documents, PDFs, articles, and videos to find or remember s
 /reset-password                            → Set a new password from email token
 /pricing                                   → Public Free vs Pro pricing
 /dashboard                                 → Workspace list ("Your notebooks") — search, create, edit, delete
-/settings/memory                           → Personal Mem0 memory management (cross-workspace)
+/settings/memory                           → User memory. `?workspaceId=` shows that notebook's memory. `?source=manual` or `?source=learned` filters either list
 /settings/billing                          → Plan, credits, Upgrade to Pro, Manage billing
 /workspace/[id]                            → Workspace chat (default view when opening a workspace)
 /workspace/[id]/sources                    → Source library (grid/list, filter, search, bulk actions)
@@ -44,8 +44,8 @@ Reading through long documents, PDFs, articles, and videos to find or remember s
 
 Two distinct navigation contexts:
 
-- **Dashboard** — a simple sticky top header: logo/home link, a "Memory" link, dark mode toggle, sign out. No sidebar.
-- **Inside a workspace** — a persistent left sidebar (`WorkspaceShell`) with four sections: **Chat**, **Learn**, **Sources**, **Settings**, plus a live list of the workspace's sources beneath the nav, an "Add source" button, and an "All workspaces" link back to the dashboard. The main content area header shows the workspace title, an "Add source" button, and sign out.
+- **Dashboard** — a simple sticky top header: logo/home link, search, credits, a Memory menu, and the account menu (theme and sign out live there). No sidebar.
+- **Inside a workspace** — a persistent left sidebar (`WorkspaceShell`) with four sections: **Chat**, **Learn**, **Sources**, **Settings**, plus a live list of the workspace's sources beneath the nav, an "Add source" button, and an "All workspaces" link back to the dashboard. The main content area header shows the workspace title, search, credits, the Memory menu (this notebook, and your memory), sources, and the account menu.
 
 ---
 
@@ -90,16 +90,16 @@ The source library UI polls sources with pending/processing status every 3 secon
 ### Chat
 
 - Per-workspace, multi-conversation chat with streaming responses (AI SDK `useChat` + `DefaultChatTransport`)
-- Each user message is classified, then retrieved from Pinecone, in parallel with a Mem0 search over the user's memories. Simple factual and ambiguous questions also retrieve with a hypothetical passage. Multi-hop, analytical, and comparative questions retrieve several queries in parallel and merge chunks by id
+- Each user message is classified, then retrieved from Pinecone, in parallel with a Mem0 search over this user's memory and this notebook's memory. Simple factual and ambiguous questions also retrieve with a hypothetical passage. Multi-hop, analytical, and comparative questions retrieve several queries in parallel and merge chunks by id
 - Retrieved chunks are scored for relevance, coverage, freshness, authority, and duplication. A score below 0.55 rewrites and retrieves once more. If the user already enabled web search, that pass can also call Tavily
 - Before the prompt is built, near-duplicate chunks are dropped and the remaining text is capped. Conflicting sources are kept, with authority and indexed time, so the model can prefer the newer or more authoritative one
 - Each of those steps is logged on the server. The "How this answer was found" panel is shown only when `RAG_TRACE_ENABLED=true`. A finished step can be opened to see the rewrite, hypothetical passage, retrieved chunks, quality scores, and CRAG decision
-- The system prompt is built from those chunks, conversation summary (if any), user memories, and web-search availability
+- The system prompt is built from those chunks, conversation summary (if any), user memory, notebook memory, and web-search availability
 - When retrieved sources do not cover the question, the reply names the gap and what the notebook focuses on, then offers web research if the toggle is on. A short yes runs that search. The latest reply also offers up to three short next questions
 - Optional **web search** toggle exposes a `web_search` tool (Tavily) the model can call for up-to-date information outside the workspace
 - Responses cite sources inline (`[1]`, `[2]`, …) and web results (`[W1]`, `[W2]`, …); citations render as hoverable source cards linking back to the source detail page or the external URL
 - Conversations can be renamed implicitly (auto-titled from the first message), deleted, or exported to a markdown file
-- Every 8 messages, a conversation summary is generated in the background and older messages are represented by that summary instead of full history (keeps context bounded); summarization also feeds recent turns to Mem0 for long-term learning
+- Every 8 messages, a conversation summary is generated in the background and older messages are represented by that summary instead of full history (keeps context bounded); summarization also feeds recent turns to Mem0 as notebook memory
 
 ### Learning Tools ("Learn")
 
@@ -109,9 +109,11 @@ The source library UI polls sources with pending/processing status every 3 secon
 
 ### Memory
 
-- Personal, cross-workspace, powered by Mem0
-- Two kinds: **manual** (user adds/edits/deletes memory text directly) and **learned** (automatically inferred from chat messages and conversation summaries)
-- The Memory Settings page (`/settings/memory`) lists all memories with their source badge and lets the user add, edit, or delete them
+- Powered by Mem0. Two scopes, and the same two kinds inside each scope
+- **User memory** is recalled in every notebook the user owns. The Memory page (`/settings/memory`) lists it. Memories added there are manual
+- **Notebook memory** is recalled only in that notebook. Open the same page with `?workspaceId=`. Chat learning, including the summary sync, is stored here. Memories added from that view are manual and stay in the notebook
+- **Manual** memories are text the user writes. **Learned** memories are inferred from chat. The page can filter with `?source=manual` or `?source=learned`
+- A memory with no scope yet is stamped once: if its `conversationId` still belongs to a notebook this user owns, it becomes notebook memory; otherwise it becomes user memory
 
 ---
 
@@ -126,7 +128,7 @@ The source library UI polls sources with pending/processing status every 3 secon
 - Per-workspace multi-conversation RAG chat with streaming, citations, model selection, optional web search tool, query classification, corrective retrieval, context compression, conversation export, and delete
 - Rolling conversation summarization for long chats
 - Six learning artifact types generated from workspace sources, each with a dedicated viewer
-- Cross-workspace long-term memory (manual + auto-learned) via Mem0
+- User memory and notebook memory (manual + auto-learned) via Mem0
 - Light/dark theme toggle (`next-themes`)
 
 ## Features Out of Scope

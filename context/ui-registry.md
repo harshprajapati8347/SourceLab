@@ -95,7 +95,7 @@ Generated shadcn/ui components, retuned to the amber/Manrope identity (radius, b
 | `StreamdownContent` (`streamdown-content.tsx`) | Markdown renderer used for streamed text and artifact bodies |
 | `NavigationProgress` (`navigation-progress.tsx`) | 2px amber bar fixed to the top of the viewport during a pathname change. Mounted once in the root layout |
 
-State and hooks: `shared/stores/ui-store.ts` (command palette, shortcuts dialog, create-notebook dialog, add-source dialog, sources panel/sheet; only the desktop panel flag is persisted), `shared/hooks/use-keyboard-shortcuts.ts` (`useKeyboardShortcuts`, `useModKeyLabel`), `shared/hooks/use-mobile.ts`, `shared/hooks/use-debounced-value.ts`, `shared/hooks/use-app-router.ts` (`useAppRouter` — `push` / `replace` start the top progress bar when the pathname changes).
+State and hooks: `shared/stores/ui-store.ts` (command palette, shortcuts dialog, create-notebook dialog, add-source dialog, sources panel/sheet; only the desktop panel flag is persisted), `shared/hooks/use-keyboard-shortcuts.ts` (`useKeyboardShortcuts`, `useModKeyLabel`), `shared/hooks/use-mobile.ts`, `shared/hooks/use-debounced-value.ts`, `shared/hooks/use-app-router.ts` (`useAppRouter` — `push` / `replace` start the top progress bar when the pathname changes), `shared/hooks/use-dismiss-mobile-sidebars.ts` (`useDismissMobileSidebars` — below `md`, closes the left sidebar sheet and the sources sheet; desktop sidebar and sources panel are left alone).
 
 ### `features/auth/components/`
 | Component | Description |
@@ -113,14 +113,14 @@ Hook: `useSignOut` (`hooks/use-sign-out.ts`). `app/(auth)/layout.tsx` is a split
 | Component | Description |
 | --- | --- |
 | `DashboardHome` (`dashboard-home.tsx`) | Dashboard: `AppHeader`, greeting, stat strip (notebooks, credits, plan), searchable notebook grid, create/edit/delete dialogs, toasts |
-| `AppHeader` (`app-header.tsx`) | Top bar outside a notebook: brand, search trigger (Cmd/Ctrl+K), `CreditsBadge`, `UserMenu` |
+| `AppHeader` (`app-header.tsx`) | Top bar outside a notebook: brand, search trigger (Cmd/Ctrl+K), `CreditsBadge`, `MemoryMenu`, `UserMenu` |
 | `AccountShell` (`account-shell.tsx`) | Frame for billing and memory: `AppHeader`, back link, `PageHeader`, content |
 | `WorkspaceCard` (`workspace-card.tsx`) | Notebook tile: icon tile, title (stretched link), description, updated-at footer with arrow nudge, edit/delete menu |
 | `CreateWorkspaceCard` (`create-workspace-card.tsx`) | Dashed "New notebook" tile |
 | `WorkspaceFormDialog` (`workspace-form-dialog.tsx`) | Create/edit dialog (title, description, icon radiogroup). The form body is an inner component mounted per open |
 | `DeleteWorkspaceDialog` (`delete-workspace-dialog.tsx`) | `AlertDialog` that names what is lost |
-| `WorkspaceShell` (`workspace-shell.tsx`) | Sidebar + inset frame for `/workspace/[id]/*`: header (title, search, model picker, credits, sources toggle, `UserMenu`; Home icon linking to `/` below `md`), right sources panel / sheet, add-source dialog, `AppOverlays`. Mounted by the route layout |
-| `WorkspaceSidebar` (`workspace-sidebar.tsx`) | Recessed sidebar: brand, notebook nav (Chat, Learn, Sources, Settings) with the amber active tick, `WorkspaceSwitcher`, "All notebooks" |
+| `WorkspaceShell` (`workspace-shell.tsx`) | Sidebar + inset frame for `/workspace/[id]/*`: header (title, search, model picker, credits, `MemoryMenu`, sources toggle, `UserMenu`; Home icon linking to `/` below `md`), right sources panel / sheet, add-source dialog, `AppOverlays`. Mounted by the route layout |
+| `WorkspaceSidebar` (`workspace-sidebar.tsx`) | Recessed sidebar: brand, notebook nav (Chat, Learn, Sources, Settings) with the amber active tick, `WorkspaceSwitcher`, "All notebooks". A same-tab link click below `md` closes this sheet and the sources sheet |
 | `WorkspaceSwitcher` (`workspace-switcher.tsx`) | Searchable notebook list in the sidebar; "+" opens the create dialog |
 | `WorkspaceHeaderActions` (`workspace-header-actions.tsx`) | Per-notebook chat model picker |
 | `WorkspaceSettingsForm` (`workspace-settings-form.tsx`) | Settings page: fields, dirty-aware save, danger zone |
@@ -133,7 +133,7 @@ Hook: `useSignOut` (`hooks/use-sign-out.ts`). `app/(auth)/layout.tsx` is a split
 | `SourceLibrary` (`source-library.tsx`) | Sources page: `PageHeader`, pill filters, grid/list toggle, select mode with bulk delete (confirmed), "Retry n failed". The grid is one column below `sm`, and cards stay within that column. |
 | `SourceCard` (`source-card.tsx`) | Source tile (grid or list `layout`): type tile, title (stretched link), preview, status badge, actions menu |
 | `SourceDetail` (`source-detail.tsx`) | Source page: status, link or PDF, processing/failed (with Try again)/empty states, Markdown preview |
-| `SourcesPanel` (`sources-panel.tsx`) | Compact `w-80` source list beside chat and learn (rows, indexing/failed state, add button, library link) |
+| `SourcesPanel` (`sources-panel.tsx`) | Compact `w-80` source list beside chat and learn (rows, indexing/failed state, add button, library link). A same-tab link click or Add below `md` closes this sheet and the left sidebar sheet |
 | `AddSourceDialog` (`add-source-dialog.tsx`) | Tabbed dialog (Text / Markdown / PDF / Website / YouTube). One `<form>` per tab so Enter submits; stays on the page and toasts with an "Open" action |
 | `SourceStatusBadge` (`source-status-badge.tsx`) | Status to icon + label: pending (clock), processing (spinner), ready (check, amber tint), failed (alert, destructive) |
 | `SourceTypeIcon` (`source-type-icon.tsx`) | Maps `SourceType` to a `lucide-react` icon |
@@ -166,8 +166,9 @@ Hook: `useSignOut` (`hooks/use-sign-out.ts`). `app/(auth)/layout.tsx` is a split
 ### `features/memory/components/`
 | Component | Description |
 | --- | --- |
-| `MemorySettings` (`memory-settings.tsx`) | `/settings/memory` in `AccountShell`: memory list with "Added by you" / "Learned" badges, add/edit, confirmed delete |
-| `MemoryFormDialog` (`memory-form-dialog.tsx`) | Create/edit dialog; inner form mounted per open |
+| `MemoryMenu` (`memory-menu.tsx`) | Top-bar dropdown. Dashboard: All memories, Added by you, Learned from chat (user memory). Inside a notebook, and on `/settings/memory?workspaceId=`: the same three links for that notebook, plus Your memory |
+| `MemorySettings` (`memory-settings.tsx`) | `/settings/memory` in `AccountShell` lists user memory. `?workspaceId=` lists that notebook. Badges stay "Added by you" / "Learned". `?source=manual` or `?source=learned` filters the open scope. Add/edit and confirmed delete stay on this page |
+| `MemoryFormDialog` (`memory-form-dialog.tsx`) | Create/edit dialog; inner form mounted per open. The description says whether the memory is recalled in every notebook or only this one |
 
 ### `features/billing/components/`
 | Component | Description |
@@ -261,6 +262,24 @@ Last updated: 2026-10-02
 | Shadow | none |
 
 **Pattern notes:** Shown only under the latest finished assistant reply. No section label. The card is the button.
+
+### Memory menu
+
+File: `client/features/memory/components/memory-menu.tsx`
+Last updated: 2026-10-03
+
+| Property | Class |
+| --- | --- |
+| Background | trigger `ghost`, `secondary` on `/settings/memory`; popup `bg-popover` |
+| Border | popup `border` via `DropdownMenuContent` |
+| Border radius | trigger `rounded-lg` (button `sm`); popup `rounded-xl`; items `rounded-lg` |
+| Text | trigger `text-sm font-medium`; menu title `text-xs font-medium text-foreground`; description `text-xs text-muted-foreground` |
+| Spacing | popup `w-64`; description `px-2 pb-1.5` |
+| Hover state | button `hover:bg-muted`; item highlight from `DropdownMenuItem` |
+| Shadow | popup `shadow-lg` |
+| Accent usage | `BrainIcon` on the trigger; `CheckIcon` on the open view |
+
+**Pattern notes:** Same dropdown as `UserMenu`, not `NavigationMenu` (that primitive's popup is `rounded-3xl`). The word hides below `sm` on the dashboard and below `md` inside a notebook; the button keeps `aria-label="Memory"`. The current view is read from `useSearchParams` inside `Suspense` so other pages still prerender. `?source=` filters the open scope. `?workspaceId=` opens that notebook's memory. The notebook header passes `workspaceId` so the menu can link there before the settings page is open. User memory stays at `/settings/memory` with no `workspaceId`.
 
 ### Navigation progress
 

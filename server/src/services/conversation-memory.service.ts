@@ -2,6 +2,7 @@ import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { CHAT_MODEL } from "../lib/ai-config.js";
 import { addMemoriesFromMessages } from "../lib/mem0.js";
+import { findUserIdByWorkspaceId } from "../repositories/workspace.repository.js";
 import {
   findConversationById,
   updateConversationSummary,
@@ -72,10 +73,16 @@ export async function summarizeConversationById(
     content: message.content,
   }));
 
-  await addMemoriesFromMessages(userId, recentMessages, {
-    source: "learned",
-    conversationId,
-  });
+  const owner = await findUserIdByWorkspaceId(conversation.workspaceId);
+
+  if (owner?.userId === userId) {
+    await addMemoriesFromMessages(userId, recentMessages, {
+      source: "learned",
+      scope: "workspace",
+      workspaceId: conversation.workspaceId,
+      conversationId,
+    });
+  }
 
   return updated;
 }

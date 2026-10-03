@@ -6,6 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
+import {
+  dismissMobileSidebarsOnAnchorClick,
+  useDismissMobileSidebars,
+} from "@/shared/hooks/use-dismiss-mobile-sidebars";
 import { useSources } from "../hooks/use-sources";
 import { SOURCE_TYPE_LABELS } from "../lib/constants";
 import { sourceRoutes } from "../lib/routes";
@@ -75,10 +79,21 @@ export function SourcesPanel({
   onAddSource,
   className,
 }: SourcesPanelProps) {
+  const dismissMobileSidebars = useDismissMobileSidebars();
   const { data: sources, isLoading, error } = useSources(workspaceId);
 
+  function addSource() {
+    dismissMobileSidebars();
+    onAddSource();
+  }
+
   return (
-    <div className={cn("flex h-full min-h-0 flex-col", className)}>
+    <div
+      className={cn("flex h-full min-h-0 flex-col", className)}
+      onClick={(event) =>
+        dismissMobileSidebarsOnAnchorClick(event, dismissMobileSidebars)
+      }
+    >
       <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4">
         <h2 className="font-heading text-sm font-semibold">
           Sources
@@ -88,7 +103,7 @@ export function SourcesPanel({
             </span>
           ) : null}
         </h2>
-        <Button className="mr-8 md:mr-0" size="sm" variant="outline" onClick={onAddSource}>
+        <Button className="mr-8 md:mr-0" size="sm" variant="outline" onClick={addSource}>
           <PlusIcon />
           Add
         </Button>
@@ -122,7 +137,7 @@ export function SourcesPanel({
               Add a PDF, a web page, a YouTube video, or paste text. Answers
               will cite what you add here.
             </p>
-            <Button className="mt-4" size="sm" onClick={onAddSource}>
+            <Button className="mt-4" size="sm" onClick={addSource}>
               <PlusIcon />
               Add a source
             </Button>

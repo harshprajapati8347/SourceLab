@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import {
@@ -33,19 +34,34 @@ import {
   useMemories,
   useUpdateMemory,
 } from "../hooks/use-memories";
+import { memoryRoutes } from "../lib/routes";
 import type { UserMemory } from "../lib/types";
 import { MemoryFormDialog } from "./memory-form-dialog";
 
-export function MemorySettings() {
+type MemorySettingsProps = {
+  sourceFilter?: "manual" | "learned" | null;
+  workspaceId?: string | null;
+};
+
+export function MemorySettings({
+  sourceFilter = null,
+  workspaceId = null,
+}: MemorySettingsProps) {
   const {
     data: memories = [],
     isLoading,
     error,
     refetch,
-  } = useMemories();
+  } = useMemories(workspaceId);
   const createMemory = useCreateMemory();
   const updateMemory = useUpdateMemory();
   const deleteMemory = useDeleteMemory();
+  const notebookMemory = Boolean(workspaceId);
+  const allMemoriesHref = memoryRoutes.href({ workspaceId });
+
+  const visibleMemories = sourceFilter
+    ? memories.filter((memory) => memory.source === sourceFilter)
+    : memories;
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingMemory, setEditingMemory] = useState<UserMemory | null>(null);
@@ -66,12 +82,15 @@ export function MemorySettings() {
       await updateMemory.mutateAsync({
         memoryId: editingMemory.id,
         input: values,
+        workspaceId,
       });
       toast.add({ title: "Memory updated", type: "success" });
       return;
     }
 
-    await createMemory.mutateAsync(values);
+    await createMemory.mutateAsync(
+      workspaceId ? { ...values, workspaceId } : values,
+    );
     toast.add({ title: "Memory added", type: "success" });
   }
 
@@ -81,7 +100,10 @@ export function MemorySettings() {
     }
 
     try {
-      await deleteMemory.mutateAsync(deletingMemory.id);
+      await deleteMemory.mutateAsync({
+        memoryId: deletingMemory.id,
+        workspaceId,
+      });
       toast.add({ title: "Memory deleted", type: "success" });
       setDeletingMemory(null);
     } catch (deleteError) {
@@ -95,8 +117,12 @@ export function MemorySettings() {
 
   return (
     <AccountShell
-      title="Memory"
-      description="Things SourceLab remembers about you across every notebook. It learns some from your chats, and you can add or remove any of them."
+      title={notebookMemory ? "Notebook memory" : "Memory"}
+      description={
+        notebookMemory
+          ? "Things SourceLab remembers about this notebook. They stay here, and chats in this notebook can recall them."
+          : "Things SourceLab remembers about you in every notebook. Add the facts you want available everywhere."
+      }
       actions={
         <Button onClick={openCreateDialog}>
           <PlusIcon />
@@ -126,8 +152,9 @@ export function MemorySettings() {
           <EmptyHeader>
             <EmptyTitle>No memories yet</EmptyTitle>
             <EmptyDescription>
-              Keep chatting and SourceLab will pick up your preferences, or add
-              one yourself.
+              {notebookMemory
+                ? "Keep chatting in this notebook and SourceLab will pick up what matters here, or add a memory yourself."
+                : "Add something you want SourceLab to remember in every notebook."}
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
@@ -137,61 +164,109 @@ export function MemorySettings() {
             </Button>
           </EmptyContent>
         </Empty>
-      ) : (
-        <ul className="space-y-3">
-          {memories.map((memory) => (
-            <li
-              key={memory.id}
-              className="rounded-xl border bg-card p-4 transition-colors duration-200 hover:border-primary/30"
+      ) : visibleMemories.length === 0 ? (
+        <Empty className="border border-dashed py-14">
+          <EmptyHeader>
+            <EmptyTitle>
+              {sourceFilter === "manual"
+                ? "No memories you added"
+                : "No learned memories"}
+            </EmptyTitle>
+            <EmptyDescription>
+              {sourceFilter === "manual"
+                ? notebookMemory
+                  ? "You have not written a memory for this notebook yet. Chat memories are still saved."
+                  : "You have not written a memory yet."
+                : notebookMemory
+                  ? "SourceLab has not learned a memory from your chats yet."
+                  : "Memories learned from a chat stay with that notebook."}
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button
+              nativeButton={false}
+              variant="outline"
+              render={<Link href={allMemoriesHref} />}
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1 space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="secondary">
-                      {memory.source === "manual" ? "Added by you" : "Learned"}
-                    </Badge>
-                    {memory.categories?.map((category) => (
-                      <Badge key={category} variant="outline">
-                        {category}
+              Show all memories
+            </Button>
+          </EmptyContent>
+        </Empty>
+      ) : (
+        <div className="space-y-3">
+          {sourceFilter ? (
+            <p className="text-sm text-muted-foreground">
+              {sourceFilter === "manual"
+                ? "Showing memories you added."
+                : "Showing memories learned from chats."}{" "}
+              <Link
+                href={allMemoriesHref}
+                className="font-medium text-foreground underline underline-offset-4 outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+              >
+                Show all
+              </Link>
+            </p>
+          ) : null}
+          <ul className="space-y-3">
+            {visibleMemories.map((memory) => (
+              <li
+                key={memory.id}
+                className="rounded-xl border bg-card p-4 transition-colors duration-200 hover:border-primary/30"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary">
+                        {memory.source === "manual" ? "Added by you" : "Learned"}
                       </Badge>
-                    ))}
+                      {memory.categories?.map((category) => (
+                        <Badge key={category} variant="outline">
+                          {category}
+                        </Badge>
+                      ))}
+                    </div>
+                    <p className="text-sm leading-relaxed">{memory.memory}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Updated{" "}
+                      {formatDistanceToNow(new Date(memory.updatedAt), {
+                        addSuffix: true,
+                      })}
+                    </p>
                   </div>
-                  <p className="text-sm leading-relaxed">{memory.memory}</p>
-                  <p className="text-xs text-muted-foreground">
-                    Updated{" "}
-                    {formatDistanceToNow(new Date(memory.updatedAt), {
-                      addSuffix: true,
-                    })}
-                  </p>
+                  <div className="flex shrink-0 gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Edit memory"
+                      onClick={() => openEditDialog(memory)}
+                    >
+                      <PencilIcon />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Delete memory"
+                      onClick={() => setDeletingMemory(memory)}
+                    >
+                      <Trash2Icon />
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex shrink-0 gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Edit memory"
-                    onClick={() => openEditDialog(memory)}
-                  >
-                    <PencilIcon />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Delete memory"
-                    onClick={() => setDeletingMemory(memory)}
-                  >
-                    <Trash2Icon />
-                  </Button>
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       <MemoryFormDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         memory={editingMemory}
+        description={
+          notebookMemory
+            ? "SourceLab brings this into a chat when it is relevant, in this notebook only."
+            : "SourceLab brings this into a chat when it is relevant, in any notebook."
+        }
         onSubmit={handleSubmit}
         isPending={createMemory.isPending || updateMemory.isPending}
       />
@@ -208,8 +283,9 @@ export function MemorySettings() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this memory?</AlertDialogTitle>
             <AlertDialogDescription>
-              SourceLab will stop using it in chats. If you mention it again, it
-              may learn it again.
+              {notebookMemory
+                ? "SourceLab will stop using it in this notebook. If you mention it again, it may learn it again."
+                : "SourceLab will stop using it across your notebooks."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

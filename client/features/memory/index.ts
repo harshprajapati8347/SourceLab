@@ -1,3 +1,4 @@
+export { MemoryMenu } from "./components/memory-menu";
 export { MemorySettings } from "./components/memory-settings";
 export { MemoryFormDialog } from "./components/memory-form-dialog";
 export { memoryRoutes } from "./lib/routes";

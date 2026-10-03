@@ -20,6 +20,7 @@ type MemoryFormDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   memory?: UserMemory | null;
+  description: string;
   onSubmit: (values: { memory: string }) => Promise<void>;
   isPending?: boolean;
 };
@@ -27,6 +28,7 @@ type MemoryFormDialogProps = {
 /** Mounted fresh each time the dialog opens, so the text starts from the memory being edited. */
 function MemoryForm({
   memory,
+  description,
   onSubmit,
   onOpenChange,
   isPending = false,
@@ -58,10 +60,7 @@ function MemoryForm({
     <form className="grid gap-5" onSubmit={(event) => void handleSubmit(event)}>
       <DialogHeader>
         <DialogTitle>{isEditing ? "Edit memory" : "Add a memory"}</DialogTitle>
-        <DialogDescription>
-          SourceLab brings a memory into a chat when it is relevant, in any
-          notebook.
-        </DialogDescription>
+        <DialogDescription>{description}</DialogDescription>
       </DialogHeader>
 
       <div className="grid gap-2">
@@ -105,6 +104,7 @@ export function MemoryFormDialog({
   open,
   onOpenChange,
   memory,
+  description,
   onSubmit,
   isPending,
 }: MemoryFormDialogProps) {
@@ -114,6 +114,7 @@ export function MemoryFormDialog({
         <MemoryForm
           key={memory?.id ?? "new"}
           memory={memory}
+          description={description}
           onSubmit={onSubmit}
           onOpenChange={onOpenChange}
           isPending={isPending}

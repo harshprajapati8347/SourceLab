@@ -65,7 +65,8 @@ import {
   countMessagesByConversationId,
   findMessagesByConversationId,
 } from "../repositories/message.repository.js";
-import { addMemoriesFromMessages, searchUserMemories } from "../lib/mem0.js";
+import { addMemoriesFromMessages } from "../lib/mem0.js";
+import { searchMemoriesForChat } from "./memory.service.js";
 import {
   formatTavilyResultsForPrompt,
   mergeWebSearchResults,
@@ -238,7 +239,7 @@ async function resolveConversation(
  * **Pipeline:**
  * 1. Validate user message and run input guardrails
  * 2. Resolve/create conversation, reject a thread already at the message limit, and save the user message
- * 3. Parallel: query and context pipeline + Mem0 memory search
+ * 3. Parallel: query and context pipeline + Mem0 search (user memory and this notebook)
  * 4. Build system prompt and generate the model response via AI SDK
  * 5. Mask PII, check grounding and citations, then run policy and secret checks
  * 6. On finish: save the safe assistant message, citations, title, summary job, Mem0 learning
@@ -358,7 +359,7 @@ export async function streamWorkspaceChat(
         });
       };
 
-      const [pipeline, userMemories] = await Promise.all([
+      const [pipeline, memories] = await Promise.all([
         runRagPipeline({
           workspaceId,
           userText: textForModel,
@@ -367,7 +368,7 @@ export async function streamWorkspaceChat(
           webSearchEnabled,
           onTrace: publishTrace,
         }),
-        searchUserMemories(userId, textForModel),
+        searchMemoriesForChat(userId, workspaceId, textForModel),
       ]);
 
       trace = pipeline.trace;
@@ -387,7 +388,8 @@ export async function streamWorkspaceChat(
       const systemPrompt = buildChatSystemPrompt({
         chunks: pipeline.chunks,
         conversationSummary: conversation.summary,
-        userMemories: userMemories.map((memory) => memory.memory),
+        userMemories: memories.userMemories,
+        workspaceMemories: memories.workspaceMemories,
         webSearchEnabled,
         webResults: pipeline.webResults,
         contradictions: pipeline.contradictions,
@@ -748,6 +750,8 @@ export async function streamWorkspaceChat(
         ],
         {
           source: "learned",
+          scope: "workspace",
+          workspaceId,
           conversationId: conversation.id,
         },
       ).catch((error) => {

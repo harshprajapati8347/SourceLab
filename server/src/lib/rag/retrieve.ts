@@ -159,6 +159,7 @@ export function buildChatSystemPrompt(input: {
   chunks: RetrievedChunk[];
   conversationSummary?: string | null;
   userMemories?: UserMemoryContext[];
+  workspaceMemories?: UserMemoryContext[];
   webSearchEnabled?: boolean;
   webResults?: TavilySearchResponse | null;
   contradictions?: Contradiction[];
@@ -188,7 +189,18 @@ export function buildChatSystemPrompt(input: {
       .join("\n");
 
     sections.push(
-      "Known facts about this user (use when relevant):",
+      "Known facts about this user, across notebooks (use when relevant):",
+      memoryBlock,
+    );
+  }
+
+  if (input.workspaceMemories?.length) {
+    const memoryBlock = input.workspaceMemories
+      .map((memory) => `- ${memory}`)
+      .join("\n");
+
+    sections.push(
+      "Known facts about this notebook only (use when relevant):",
       memoryBlock,
     );
   }

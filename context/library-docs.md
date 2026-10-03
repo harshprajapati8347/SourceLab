@@ -143,9 +143,11 @@ return result.output;
 ### Mem0 (`mem0ai`)
 
 - Singleton `MemoryClient` (`getMem0Client()`), requires `MEM0_API_KEY`; every public function checks the key first and returns `[]`/no-ops instead of throwing when it's absent — memory is a soft dependency.
-- `addUserMemory` (manual, `infer: false`) vs `addMemoriesFromMessages` (auto-learned, `infer: true`, fire-and-forget from chat) — `metadata: { source: "manual" | "learned" }` on the Mem0 record is what the app's `AppMemory.source` field is derived from (`mapMemory()`).
-- `searchUserMemories(userId, query)` — semantic search, `topK: 8`, `threshold: 0.1`, always filtered by `{ user_id: userId }`.
-- Never call the Mem0 SDK directly from a controller/service outside `server/src/lib/mem0.ts` — go through its exported functions.
+- Two scopes on the same Mem0 user, stored in metadata. `scope: "user"` has no `workspaceId` and is recalled in every notebook. `scope: "workspace"` plus `workspaceId` is recalled only in that notebook. `source: "manual" | "learned"` is unchanged, and `mapMemory()` derives both `source` and `scope` from metadata.
+- `addUserMemory` (manual, `infer: false`) vs `addMemoriesFromMessages` (auto-learned, `infer: true`, fire-and-forget from chat). Chat learning and the summary sync write notebook memory. A manual add on `/settings/memory` is user memory; a manual add with `workspaceId` is notebook memory.
+- Chat recall searches both scopes (`topK: 8`, `threshold: 0.1` each) and keeps 8 combined, ordered by score. Filters use `user_id` and a nested `metadata` object (`{ scope }` and, for a notebook, `workspaceId`). Dotted keys such as `metadata.scope` are rejected. Results that do not match the requested scope are dropped. `add` with `infer: false` returns `{ results: [{ id, data: { memory } }] }`, not a bare array.
+- Rows with no `scope` are stamped once per process: a `conversationId` that still belongs to a notebook this user owns becomes notebook memory; every other row becomes user memory. Deleting a notebook deletes its notebook memories by id. Do not call `deleteAll` with only `user_id`.
+- Never call the Mem0 SDK directly from a controller/service outside `server/src/lib/mem0.ts` — go through its exported functions. Scope rules and ownership checks live in `server/src/services/memory.service.ts`.
 
 ### Cloudinary (`cloudinary`)
 

@@ -23,7 +23,7 @@
 | Website scraping      | Firecrawl (`@mendable/firecrawl-js`)                        | Converts a URL into clean markdown for indexing |
 | YouTube transcripts   | `youtube-transcript`                                        | Extracts caption text from a YouTube URL |
 | Web search            | Tavily (`@tavily/core`)                                     | Chat "web_search" tool for up-to-date info outside the workspace |
-| Long-term memory      | Mem0 (`mem0ai`)                                              | Per-user semantic memory, manual + auto-learned from chat |
+| Long-term memory      | Mem0 (`mem0ai`)                                              | User memory across notebooks, and notebook memory isolated to one workspace. Manual + auto-learned from chat |
 | PDF text extraction   | `unpdf`                                                      | Extracts text (and per-page text) from PDF buffers |
 | Validation            | `zod` (v4)                                                   | Request body/param/query schemas on the server |
 | Uploads               | `multer`                                                     | Multipart PDF upload middleware |
@@ -163,7 +163,7 @@ streamWorkspaceChat():
   - input guardrails, then resolve/create Conversation, deduct 0.1 credits, save user Message.
     Off Topic does not stop a document question or a current external question when web search is on.
     A pure jailbreak still blocks. A request to obey instructions inside a document continues as the safe task
-  - in parallel: runRagPipeline() and searchUserMemories() [Mem0]
+  - in parallel: runRagPipeline() and searchMemoriesForChat() [Mem0 user memory + this notebook's memory]
         ↓
 runRagPipeline():
   - gpt-4o-mini classifies the latest message (summary + recent turns) and routes transforms
@@ -186,7 +186,7 @@ runRagPipeline():
         ↓
 streamWorkspaceChat() continues:
   - buildChatSystemPrompt() from compressed chunks, authority metadata, conflicts,
-    memories, summary, weak-evidence note, and any corrective web results
+    user memory, notebook memory, summary, weak-evidence note, and any corrective web results
   - the same steps are logged as `[rag]` console lines. They are streamed as a `data-rag` part only when `RAG_TRACE_ENABLED=true`
   - streamText() (AI SDK) with optional web_search tool (Tavily) runs on the server. Later web searches append to the same `[W#]` list. A web answer that omits those markers gets them appended so the source links stay visible. Web pages are labeled as outside the workspace
   - output guardrails then mask PII, keep cited paraphrases, redact real credentials in place, and run moderation
@@ -195,7 +195,8 @@ streamWorkspaceChat() continues:
               results, excerpts masked, `cited` set from markers that remain),
               touch conversation, auto-title if new,
               every CONVERSATION_SUMMARY_INTERVAL (8) messages → enqueue conversation/summarize,
-              fire-and-forget Mem0 addMemoriesFromMessages() with the safe text
+              fire-and-forget Mem0 addMemoriesFromMessages() with the safe text,
+              stored as notebook memory
         ↓
 Response headers include X-Conversation-Id so the client can adopt a newly created conversation
 ```
@@ -218,7 +219,7 @@ step: generate → gatherSourceContext() [concatenate READY sources, max 120k ch
 Message count % 8 === 0 → conversation/summarize event
         ↓
 summarizeConversationById(): generateText() rolls the previous summary + full transcript into an updated summary,
-saves it on Conversation, and feeds the last 16 messages to Mem0 for long-term learning
+saves it on Conversation, and feeds the last 16 messages to Mem0 as notebook memory
 ```
 
 ---

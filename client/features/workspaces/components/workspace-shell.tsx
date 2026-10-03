@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { HouseIcon, PanelRightIcon, SearchIcon } from "lucide-react";
 import { CreditsBadge } from "@/features/billing";
 import { UserMenu } from "@/features/auth/components/user-menu";
+import { MemoryMenu } from "@/features/memory/components/memory-menu";
 import { learnRoutes } from "@/features/learn/lib/routes";
 import { AddSourceDialog, SourcesPanel } from "@/features/sources";
 import { Button } from "@/components/ui/button";
@@ -108,6 +109,7 @@ export function WorkspaceShell({
 
           <WorkspaceHeaderActions workspace={workspace} />
           <CreditsBadge className="hidden sm:inline-flex" />
+          <MemoryMenu hideLabelBelow="md" workspaceId={workspace.id} />
 
           {hasSourcesPanel ? (
             <Button

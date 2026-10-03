@@ -6,10 +6,13 @@ export type UserMemory = {
   metadata?: Record<string, unknown> | null;
   categories?: string[];
   source: "manual" | "learned";
+  scope: "user" | "workspace";
+  workspaceId: string | null;
 };
 
 export type CreateMemoryInput = {
   memory: string;
+  workspaceId?: string;
 };
 
 export type UpdateMemoryInput = {
