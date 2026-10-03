@@ -130,7 +130,7 @@ Hook: `useSignOut` (`hooks/use-sign-out.ts`). `app/(auth)/layout.tsx` is a split
 ### `features/sources/components/`
 | Component | Description |
 | --- | --- |
-| `SourceLibrary` (`source-library.tsx`) | Sources page: `PageHeader`, pill filters, grid/list toggle, select mode with bulk delete (confirmed), "Retry n failed" |
+| `SourceLibrary` (`source-library.tsx`) | Sources page: `PageHeader`, pill filters, grid/list toggle, select mode with bulk delete (confirmed), "Retry n failed". The grid is one column below `sm`, and cards stay within that column. |
 | `SourceCard` (`source-card.tsx`) | Source tile (grid or list `layout`): type tile, title (stretched link), preview, status badge, actions menu |
 | `SourceDetail` (`source-detail.tsx`) | Source page: status, link or PDF, processing/failed (with Try again)/empty states, Markdown preview |
 | `SourcesPanel` (`sources-panel.tsx`) | Compact `w-80` source list beside chat and learn (rows, indexing/failed state, add button, library link) |

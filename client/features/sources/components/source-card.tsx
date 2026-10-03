@@ -38,7 +38,7 @@ export function SourceCard({
   return (
     <article
       className={cn(
-        "group relative flex rounded-xl border bg-card p-4 transition-colors duration-200 ease-house focus-within:border-primary/40 hover:border-primary/40",
+        "group relative flex w-full min-w-0 overflow-hidden rounded-xl border bg-card p-4 transition-colors duration-200 ease-house focus-within:border-primary/40 hover:border-primary/40",
         isList ? "items-center gap-4" : "flex-col gap-3",
         className,
       )}
@@ -69,7 +69,7 @@ export function SourceCard({
             })}
           </p>
           {!isList && preview ? (
-            <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+            <p className="mt-2 line-clamp-2 text-xs leading-relaxed wrap-break-word text-muted-foreground">
               {preview}
             </p>
           ) : null}

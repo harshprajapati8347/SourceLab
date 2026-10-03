@@ -102,7 +102,7 @@ export function SourceLibrary({ workspaceId }: SourceLibraryProps) {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 p-4 md:p-8">
+    <div className="mx-auto flex w-full min-w-0 max-w-6xl flex-1 flex-col gap-6 p-4 md:p-8">
       <PageHeader
         title="Sources"
         description={
@@ -326,7 +326,7 @@ export function SourceLibrary({ workspaceId }: SourceLibraryProps) {
           aria-busy="true"
           aria-label="Loading sources"
           className={cn(
-            "grid gap-4",
+            "grid min-w-0 grid-cols-1 gap-4",
             view === "grid" && "sm:grid-cols-2 xl:grid-cols-3",
           )}
         >
@@ -349,12 +349,12 @@ export function SourceLibrary({ workspaceId }: SourceLibraryProps) {
       ) : sources && sources.length > 0 ? (
         <ul
           className={cn(
-            "grid gap-3",
-            view === "grid" ? "sm:grid-cols-2 xl:grid-cols-3" : "grid-cols-1",
+            "grid min-w-0 grid-cols-1 gap-3",
+            view === "grid" && "sm:grid-cols-2 xl:grid-cols-3",
           )}
         >
           {sources.map((source) => (
-            <li key={source.id} className="flex items-start gap-3">
+            <li key={source.id} className="flex w-full min-w-0 items-start gap-3">
               {selectionMode ? (
                 <Checkbox
                   className="mt-5"

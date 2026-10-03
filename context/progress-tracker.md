@@ -42,7 +42,7 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 - [x] Additional web-search-to-source import endpoint (`/import/web-search`)
 - [x] Background processing pipeline (Inngest): extract → chunk → embed → index, with status tracking (`PENDING → PROCESSING → READY/FAILED`)
 - [x] Reprocess a single failed source, or bulk-reprocess all failed sources
-- [x] Source library: search, type filter, status filter, grid/list view toggle, multi-select bulk delete
+- [x] Source library: search, type filter, status filter, grid/list view toggle, multi-select bulk delete. The grid is one column below `sm`, and cards stay within that column.
 - [x] Source detail page with extracted content preview, chunk count, processing/failed states
 - [x] Live polling (3s) while a source is pending/processing
 
