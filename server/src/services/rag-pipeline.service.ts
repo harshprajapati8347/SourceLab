@@ -47,6 +47,13 @@ import {
   suggestFollowUpQuestions,
 } from "../lib/rag/suggested-questions.js";
 import {
+  asksConflictingValues,
+  buildInsufficientEvidenceReply,
+  conflictRetrievalQueries,
+  isWebSearchEligible,
+  sharesWorkspaceSubject,
+} from "../lib/rag/request-disposition.js";
+import {
   acceptsWebResearch,
   buildUncoveredTopicReply,
   focusFromTitles,
@@ -97,7 +104,10 @@ export type RagPipelineResult = {
  *
  * Classification, HyDE, and coverage failures fall open to ordinary retrieval.
  * A low gate score runs one rewrite-and-expand pass, then Tavily only when
- * web search is already enabled.
+ * web search is already enabled. A current external question searches the web
+ * when the topic is still missing. A workspace subject with a missing fact
+ * gets an insufficient-evidence reply. An explicit numeric conflict keeps both
+ * passages.
  *
  * @param input - Workspace, user text, conversation context, and web-search flag
  * @returns Chunks, conflicts, and web results ready for the system prompt
@@ -125,7 +135,7 @@ export async function runRagPipeline(input: {
     return answerAcceptedResearch(input, acceptedTopic, trace);
   }
 
-  const plan = await planQuery({
+  let plan = await planQuery({
     userText: input.userText,
     conversationSummary: input.conversationSummary,
     recentTurns: input.recentTurns,
@@ -151,6 +161,17 @@ export async function runRagPipeline(input: {
       }
     },
   });
+
+  const preserveConflicts = asksConflictingValues(input.userText);
+  if (preserveConflicts) {
+    plan = {
+      ...plan,
+      skipRetrieval: false,
+      retrievalQueries: conflictRetrievalQueries(input.userText),
+      hydePassage: null,
+      transforms: plan.transforms.filter((transform) => transform !== "hyde"),
+    };
+  }
 
   trace.step({
     id: "classified",
@@ -199,14 +220,15 @@ export async function runRagPipeline(input: {
     lines: plan.retrievalQueries.map(previewQuery),
   });
 
-  const retrieved = plan.usedFallback
-    ? capChunks(
-        await retrieveWorkspaceContext(input.workspaceId, input.userText),
-      )
-    : await retrieveMergedWorkspaceContext(
-        input.workspaceId,
-        plan.retrievalQueries,
-      );
+  const retrieved =
+    plan.usedFallback && !preserveConflicts
+      ? capChunks(
+          await retrieveWorkspaceContext(input.workspaceId, input.userText),
+        )
+      : await retrieveMergedWorkspaceContext(
+          input.workspaceId,
+          plan.retrievalQueries,
+        );
 
   trace.step({
     id: "retrieval",
@@ -244,7 +266,7 @@ export async function runRagPipeline(input: {
   let webResults: TavilySearchResponse | null = null;
 
   if (plan.usedFallback) {
-    const prepared = await compressWithoutGate(enriched);
+    const prepared = await compressWithoutGate(enriched, preserveConflicts);
     recordContext(trace, enriched, prepared.chunks, prepared.removed, []);
     return finish(trace, {
       chunks: prepared.chunks,
@@ -269,6 +291,7 @@ export async function runRagPipeline(input: {
   let quality = await evaluateRetrievalQuality({
     query: input.userText,
     chunks: enriched,
+    preserveDistinctFacts: preserveConflicts,
   });
   if (quality.judgementFailed) {
     return plainRetrieval(input, plan, transforms, trace);
@@ -323,6 +346,7 @@ export async function runRagPipeline(input: {
     quality = await evaluateRetrievalQuality({
       query: input.userText,
       chunks: enriched,
+      preserveDistinctFacts: preserveConflicts,
     });
     if (quality.judgementFailed) {
       return plainRetrieval(input, plan, transforms, trace);
@@ -346,7 +370,62 @@ export async function runRagPipeline(input: {
       `Coverage after workspace retry: ${formatScore(quality.dimensions.coverage)}.`,
     ];
 
-    if (topicMissed(input.userText, quality)) {
+    if (
+      topicMissed(input.userText, quality) &&
+      !(preserveConflicts && quality.uniqueChunks.length > 0)
+    ) {
+      recordQuality(
+        trace,
+        quality,
+        "After corrective retrieval",
+        "quality-final",
+      );
+
+      if (isWebSearchEligible(input.userText, input.webSearchEnabled)) {
+        return answerFromWeb(input.userText, trace, plan, transforms);
+      }
+
+      const subjectTexts = quality.uniqueChunks.flatMap((chunk) => [
+        chunk.sourceTitle,
+        chunk.text,
+      ]);
+      if (!sharesWorkspaceSubject(input.userText, subjectTexts)) {
+        subjectTexts.push(
+          ...(await readySourceTitles(input.workspaceId)),
+        );
+      }
+
+      if (sharesWorkspaceSubject(input.userText, subjectTexts)) {
+        const reply = buildInsufficientEvidenceReply(input.userText);
+        trace.step({
+          id: "crag",
+          label: "CRAG",
+          status: "done",
+          summary: "Sources do not specify this fact",
+          lines: [
+            ...cragLines,
+            "The workspace subject is present, and the asked fact is not.",
+          ],
+        });
+        trace.step({
+          id: "source-coverage",
+          label: "Source coverage",
+          status: "done",
+          summary: "Fact not in the sources",
+          lines: [reply],
+        });
+        return finish(trace, {
+          chunks: [],
+          contradictions: [],
+          gateScore: quality.dimensions.coverage,
+          weakEvidence: true,
+          webResults: null,
+          queryClass: plan.queryClass,
+          transforms,
+          directReply: reply,
+        });
+      }
+
       trace.step({
         id: "crag",
         label: "CRAG",
@@ -357,12 +436,6 @@ export async function runRagPipeline(input: {
           "Web search waits until the user accepts it.",
         ],
       });
-      recordQuality(
-        trace,
-        quality,
-        "After corrective retrieval",
-        "quality-final",
-      );
       return finishUncovered(
         input,
         plan,
@@ -373,7 +446,11 @@ export async function runRagPipeline(input: {
       );
     }
 
-    if (quality.gateScore < RAG_QUALITY_GATE && input.webSearchEnabled) {
+    if (
+      quality.gateScore < RAG_QUALITY_GATE &&
+      input.webSearchEnabled &&
+      !preserveConflicts
+    ) {
       try {
         trace.step({
           id: "crag",
@@ -387,6 +464,7 @@ export async function runRagPipeline(input: {
           query: input.userText,
           chunks: quality.uniqueChunks,
           webSnippets: toWebSnippets(webResults),
+          preserveDistinctFacts: preserveConflicts,
         });
         if (quality.judgementFailed) {
           return plainRetrieval(input, plan, plan.transforms, trace);
@@ -398,6 +476,11 @@ export async function runRagPipeline(input: {
       } catch {
         cragLines.push("Web search failed. Continuing with workspace chunks.");
       }
+    } else if (quality.gateScore < RAG_QUALITY_GATE && preserveConflicts) {
+      cragLines.push(
+        "Both conflicting values were kept.",
+        "Web search was not used.",
+      );
     } else if (quality.gateScore < RAG_QUALITY_GATE) {
       cragLines.push(
         "Web search was not used because the toggle is off.",
@@ -429,7 +512,7 @@ export async function runRagPipeline(input: {
     });
   }
 
-  const prepared = compressForPrompt(quality);
+  const prepared = compressForPrompt(quality, preserveConflicts);
   const removed = scoredInput.filter(
     (chunk) =>
       !quality.uniqueChunks.some((kept) => kept.chunkId === chunk.chunkId),
@@ -539,7 +622,10 @@ async function plainRetrieval(
     await retrieveWorkspaceContext(input.workspaceId, input.userText),
   );
   const enriched = await enrichChunks(input.workspaceId, retrieved);
-  const prepared = await compressWithoutGate(enriched);
+  const prepared = await compressWithoutGate(
+    enriched,
+    asksConflictingValues(input.userText),
+  );
 
   trace.step({
     id: "fallback",
@@ -593,12 +679,17 @@ async function enrichChunks(
   }
 }
 
-async function compressWithoutGate(chunks: EnrichedChunk[]) {
+async function compressWithoutGate(
+  chunks: EnrichedChunk[],
+  preserveDistinctFacts = false,
+) {
   const embeddings = await embedChunksForDedup(chunks);
   const dedupFailed = chunks.length > 0 && embeddings.length !== chunks.length;
   const deduped = dedupFailed
     ? { unique: chunks, removedCount: 0 }
-    : deduplicateChunks(chunks, embeddings, RAG_DEDUP_THRESHOLD);
+    : deduplicateChunks(chunks, embeddings, RAG_DEDUP_THRESHOLD, {
+        preserveDistinctFacts,
+      });
   const compressed = compressChunks(
     deduped.unique,
     new Set<string>(),
@@ -615,10 +706,18 @@ async function compressWithoutGate(chunks: EnrichedChunk[]) {
   };
 }
 
-function compressForPrompt(quality: RetrievalQuality) {
+function compressForPrompt(
+  quality: RetrievalQuality,
+  preserveConflicts = false,
+) {
   const pinned = new Set(
     quality.contradictions.flatMap((conflict) => conflict.chunkIds),
   );
+  if (preserveConflicts) {
+    for (const chunk of quality.uniqueChunks) {
+      pinned.add(chunk.chunkId);
+    }
+  }
 
   return {
     chunks: compressChunks(
@@ -708,6 +807,94 @@ async function loadNotebookSamples(
   } catch {
     logRagEvent("suggestions", { samplesFailed: true });
     return [];
+  }
+}
+
+async function readySourceTitles(workspaceId: string) {
+  try {
+    const sources = await findReadySourcesWithChunks(workspaceId);
+    return sources.map((source) => source.title);
+  } catch {
+    logRagEvent("suggestions", { samplesFailed: true });
+    return [];
+  }
+}
+
+/**
+ * Answers a current external question from Tavily when the workspace missed it.
+ *
+ * @param query - User question to search
+ * @param trace - Trace recorder for this turn
+ * @param plan - Retrieval plan, kept on the result for the trace
+ * @param transforms - Transforms already applied
+ * @returns Web results for the chat model, or a direct reply when search fails
+ */
+async function answerFromWeb(
+  query: string,
+  trace: RagTraceRecorder,
+  plan: QueryPlan,
+  transforms: QueryTransform[],
+): Promise<RagPipelineResult> {
+  trace.step({
+    id: "crag",
+    label: "CRAG",
+    status: "active",
+    summary: "Searching the web",
+    lines: [query],
+  });
+
+  try {
+    const webResults = await searchWeb(query);
+    trace.step({
+      id: "crag",
+      label: "CRAG",
+      status: "done",
+      summary: `${webResults.results.length} web ${webResults.results.length === 1 ? "result" : "results"}`,
+      lines: webResults.results.map((item) => item.title),
+    });
+
+    if (webResults.results.length === 0) {
+      return finish(trace, {
+        chunks: [],
+        contradictions: [],
+        gateScore: 0,
+        weakEvidence: true,
+        webResults: null,
+        queryClass: plan.queryClass,
+        transforms,
+        directReply: `I couldn't find web results on ${query}. Try again in a moment.`,
+      });
+    }
+
+    return finish(trace, {
+      chunks: [],
+      contradictions: [],
+      gateScore: 1,
+      weakEvidence: false,
+      webResults,
+      queryClass: plan.queryClass,
+      transforms,
+      researchTopic: query,
+    });
+  } catch {
+    logRagEvent("web-research", { failed: true });
+    trace.step({
+      id: "crag",
+      label: "CRAG",
+      status: "done",
+      summary: "Web search failed",
+      lines: ["The search did not return results."],
+    });
+    return finish(trace, {
+      chunks: [],
+      contradictions: [],
+      gateScore: 0,
+      weakEvidence: true,
+      webResults: null,
+      queryClass: plan.queryClass,
+      transforms,
+      directReply: `I couldn't complete web research on ${query}. Try again in a moment.`,
+    });
   }
 }
 

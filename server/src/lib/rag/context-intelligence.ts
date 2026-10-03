@@ -7,6 +7,7 @@
 import { RAG_DEDUP_EMBED_CHARS } from "../ai-config.js";
 import { embedTexts } from "../openai.js";
 import type { EnrichedChunk } from "./authority.js";
+import { textsStateDistinctFacts } from "./request-disposition.js";
 
 /**
  * Cosine similarity of two equal-length embedding vectors.
@@ -37,15 +38,20 @@ export function cosineSimilarity(left: number[], right: number[]) {
 /**
  * Drops near-duplicate chunks, keeping the higher-authority, then fresher, then higher-scoring copy.
  *
+ * When `preserveDistinctFacts` is set, a near-duplicate that states a different
+ * number or month-year is kept. Other questions still drop the older copy.
+ *
  * @param chunks - Enriched chunks in any order
  * @param embeddings - Embeddings aligned by index with `chunks`
  * @param threshold - Cosine similarity that marks a duplicate
+ * @param options - Set `preserveDistinctFacts` for an explicit value conflict
  * @returns Kept chunks and how many were removed
  */
 export function deduplicateChunks(
   chunks: EnrichedChunk[],
   embeddings: number[][],
   threshold: number,
+  options?: { preserveDistinctFacts?: boolean },
 ) {
   const order = chunks
     .map((_, index) => index)
@@ -65,7 +71,18 @@ export function deduplicateChunks(
         return false;
       }
 
-      return cosineSimilarity(embedding, keptEmbedding) >= threshold;
+      if (cosineSimilarity(embedding, keptEmbedding) < threshold) {
+        return false;
+      }
+
+      if (
+        options?.preserveDistinctFacts &&
+        textsStateDistinctFacts(chunks[index].text, chunks[keptIndex].text)
+      ) {
+        return false;
+      }
+
+      return true;
     });
 
     if (!duplicate) {

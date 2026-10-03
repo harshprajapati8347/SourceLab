@@ -85,6 +85,20 @@ export function sourcesMissTopic(coverage: number) {
 }
 
 /**
+ * Content words from a question, with question words and short tokens removed.
+ *
+ * @param question - Latest user message
+ * @returns Words such as "novadesk" or "encryption"
+ */
+export function questionContentTerms(question: string) {
+  return question
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((word) => word.length > 3 && !TERM_STOPWORDS.has(word));
+}
+
+/**
  * True when the question names at least two content words and none of them appear in the passages.
  *
  * A single word such as "ideas" is ignored so broad questions still use the coverage score.
@@ -94,11 +108,7 @@ export function sourcesMissTopic(coverage: number) {
  * @returns Whether the sources lexically miss the asked topic
  */
 export function questionTermsMissing(question: string, texts: string[]) {
-  const terms = question
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .split(/\s+/)
-    .filter((word) => word.length > 3 && !TERM_STOPWORDS.has(word));
+  const terms = questionContentTerms(question);
 
   if (terms.length < 2) {
     return false;

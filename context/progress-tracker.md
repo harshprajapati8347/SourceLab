@@ -55,7 +55,8 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 - [x] Opening a notebook resumes its latest chat. A new chat is created only from New Chat, or when the notebook has no chats
 - [x] A conversation stops at 10 stored messages and asks the user to start a new chat. The server rejects the next turn before retrieval or credit deduction
 - [x] Deep-link into chat with a pre-filled question (`?ask=...`, used by the mind map viewer's "ask in chat")
-- [x] Input guardrails (`@openai/guardrails`) before RAG: moderation, jailbreak, off-topic, and blocking PII for payment credentials. A block returns the original message and restores it in the composer.
+- [x] Input guardrails (`@openai/guardrails`) before RAG: moderation, jailbreak, off-topic, and blocking PII for payment credentials. A block returns the original message and restores it in the composer. Document questions and current external questions with web search on are not blocked as Off Topic. A request to obey instructions inside a document keeps the safe task and says those instructions were not followed.
+- [x] A workspace subject with a missing fact is answered as insufficient evidence, without inventing the fact. An explicit numeric conflict keeps both values. Web answers expose `[W#]` source links.
 - [x] Query classification and routing (rewrite, HyDE, sub-questions, multi-query) before Pinecone retrieval
 - [x] Retrieval-quality gate (relevance, coverage, freshness, authority, duplication) with one corrective pass, and Tavily only when web search is already enabled
 - [x] Semantic dedup, extractive context compression, and contradiction notes passed into the system prompt with source authority and indexed time

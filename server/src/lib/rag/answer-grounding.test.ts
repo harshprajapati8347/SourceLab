@@ -49,6 +49,26 @@ describe("grounding", () => {
     );
   });
 
+  it("keeps a sentence that says the sources do not specify a fact", () => {
+    const result = settleGrounding(
+      "The workspace sources do not specify an Enterprise annual contract price.",
+      [
+        {
+          span: "The workspace sources do not specify an Enterprise annual contract price.",
+          citations: [],
+          supported: false,
+        },
+      ],
+      new Map([["1", "NovaDesk Pro is $20 per month."]]),
+    );
+
+    assert.equal(
+      result.text,
+      "The workspace sources do not specify an Enterprise annual contract price.",
+    );
+    assert.equal(result.verdict, "NOT_SCORED");
+  });
+
   it("keeps an explicit statement that a detail is not in the sources", () => {
     const result = settleGrounding(
       "The email is ada@example.com [1]. City: Not mentioned. Company: Not mentioned.",

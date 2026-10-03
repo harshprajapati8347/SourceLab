@@ -2,9 +2,11 @@
  * Input guardrails for workspace chat.
  *
  * Checks the latest user message before conversation creation, credit
- * deduction, retrieval, or the AI SDK stream. A tripwire becomes
+ * deduction, retrieval, or the AI SDK stream. A blocking tripwire becomes
  * {@link GuardrailTripwireTriggered}; the chat service maps that to
  * {@link InputBlockedError} so Express returns JSON instead of a stream.
+ * Document questions, web-search-eligible questions, and a safe task mixed
+ * with a request to obey a document continue.
  */
 
 import { fileURLToPath } from "node:url";
@@ -12,10 +14,14 @@ import {
   GuardrailTripwireTriggered,
   loadPipelineBundles,
   runGuardrails,
-  type GuardrailBundle,
+  type GuardrailResult,
   type PipelineConfig,
 } from "@openai/guardrails";
 import OpenAI from "openai";
+import {
+  separateEmbeddedInstruction,
+  shouldDeferOffTopic,
+} from "./rag/request-disposition.js";
 import { InputBlockedError } from "../types/app-error.js";
 
 const configPath = fileURLToPath(
@@ -89,28 +95,90 @@ export function toInputBlockedError(
   );
 }
 
+export type ChatInputDecision = {
+  /** Text sent to retrieval and the model. The stored user message stays original. */
+  textForModel: string;
+  /** True when a request to obey instructions inside a document was removed. */
+  ignoredEmbeddedInstructions: boolean;
+};
+
 /**
  * Runs pre-flight checks, then input checks, on the latest user message.
  *
- * Pre-flight covers moderation and credential PII. Input covers jailbreak
- * and off-topic classification. The first tripwire stops the request.
- * A guardrail that fails to execute is rethrown so the request fails closed.
+ * Pre-flight covers moderation and credential PII. Those tripwires always
+ * stop the request. A jailbreak stops the request unless it only adds a
+ * request to obey instructions inside a document, in which case the safe
+ * task continues. That same split is applied when the classifier does not
+ * trip, so the model still receives only the safe task. An off-topic tripwire continues for a document question
+ * or a web-search-eligible question. A guardrail that fails to execute is
+ * rethrown so the request fails closed.
  *
  * @param text - Latest user message text
+ * @param options - Whether web search can run for this turn
+ * @returns The text to retrieve and generate from
  * @throws {GuardrailTripwireTriggered} When a configured check blocks the text
  */
-export async function assertChatInputAllowed(text: string): Promise<void> {
+export async function assertChatInputAllowed(
+  text: string,
+  options?: { webSearchEnabled?: boolean },
+): Promise<ChatInputDecision> {
   const pipeline = await loadPipeline();
   const context = getGuardrailContext();
-  const stages = [pipeline.pre_flight, pipeline.input].filter(
-    (stage): stage is GuardrailBundle => !!stage && stage.guardrails.length > 0,
-  );
+  const webSearchEnabled = options?.webSearchEnabled ?? false;
+  let textForModel = text;
+  let ignoredEmbeddedInstructions = false;
 
-  for (const stage of stages) {
-    const results = await runGuardrails(text, stage, context, true);
+  if (pipeline.pre_flight && pipeline.pre_flight.guardrails.length > 0) {
+    const results = await runGuardrails(
+      text,
+      pipeline.pre_flight,
+      context,
+      true,
+    );
     const triggered = results.find((result) => result.tripwireTriggered);
     if (triggered) {
       throw new GuardrailTripwireTriggered(triggered);
     }
   }
+
+  if (pipeline.input && pipeline.input.guardrails.length > 0) {
+    const results = await runGuardrails(text, pipeline.input, context, true);
+    for (const result of results) {
+      if (!result.tripwireTriggered) {
+        continue;
+      }
+
+      const name = guardrailNameFromResult(result);
+      if (name === "Jailbreak") {
+        const split = separateEmbeddedInstruction(text);
+        if (split) {
+          textForModel = split.safeText;
+          ignoredEmbeddedInstructions = true;
+          continue;
+        }
+      } else if (
+        name === "Off Topic Prompts" &&
+        shouldDeferOffTopic(text, webSearchEnabled)
+      ) {
+        continue;
+      }
+
+      throw new GuardrailTripwireTriggered(result);
+    }
+  }
+
+  if (!ignoredEmbeddedInstructions) {
+    const split = separateEmbeddedInstruction(text);
+    if (split) {
+      textForModel = split.safeText;
+      ignoredEmbeddedInstructions = true;
+    }
+  }
+
+  return { textForModel, ignoredEmbeddedInstructions };
+}
+
+function guardrailNameFromResult(result: GuardrailResult) {
+  const name = result.info.guardrail_name;
+  return typeof name === "string" && name.trim() ? name : "Unknown";
 }

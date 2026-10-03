@@ -488,7 +488,7 @@ function citationStep(
 }
 
 const ABSENCE_STATEMENT =
-  /\b(?:not mentioned|isn'?t mentioned|not available|not provided|not in the (?:sources|source|documents|document|context|evidence)|cannot be determined|can'?t be determined|does not (?:mention|include|contain)|do not (?:mention|include|contain))\b/i;
+  /\b(?:not mentioned|isn'?t mentioned|not available|not provided|not in the (?:sources|source|documents|document|context|evidence)|cannot be determined|can'?t be determined|does not (?:mention|include|contain|specify)|do not (?:mention|include|contain|specify))\b/i;
 
 const FIELD_LABELS = new Set([
   "email",

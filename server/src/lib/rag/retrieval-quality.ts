@@ -79,12 +79,15 @@ export async function evaluateRetrievalQuality(input: {
   query: string;
   chunks: EnrichedChunk[];
   webSnippets?: WebSnippet[];
+  preserveDistinctFacts?: boolean;
 }): Promise<RetrievalQuality> {
   const webSnippets = dedupeWebSnippets(input.webSnippets ?? []);
   const embeddings = await embedChunksForDedup(input.chunks);
   const deduped =
     embeddings.length === input.chunks.length
-      ? deduplicateChunks(input.chunks, embeddings, RAG_DEDUP_THRESHOLD)
+      ? deduplicateChunks(input.chunks, embeddings, RAG_DEDUP_THRESHOLD, {
+          preserveDistinctFacts: input.preserveDistinctFacts,
+        })
       : { unique: input.chunks, removedCount: 0 };
 
   if (embeddings.length !== input.chunks.length && input.chunks.length > 0) {

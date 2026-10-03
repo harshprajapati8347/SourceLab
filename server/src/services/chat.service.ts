@@ -38,6 +38,11 @@ import {
 import { enqueueConversationSummarize } from "../lib/conversation-events.js";
 import { groundAnswer } from "../lib/rag/answer-grounding.js";
 import { logRagEvent } from "../lib/rag/rag-log.js";
+import {
+  appendEmbeddedInstructionNote,
+  asksConflictingValues,
+  ensureWebSourceMarkers,
+} from "../lib/rag/request-disposition.js";
 import { buildChatSystemPrompt } from "../lib/rag/retrieve.js";
 import {
   readStoredSuggestions,
@@ -86,6 +91,7 @@ import {
   buildConversationTitle,
   getLastUserMessageText,
   getTextFromUIMessage,
+  replaceLastUserMessageText,
 } from "../utils/chat-message.js";
 import { getWorkspaceByIdForUser } from "./workspace.service.js";
 
@@ -272,8 +278,15 @@ export async function streamWorkspaceChat(
     throw new ValidationError("A user message is required");
   }
 
+  let textForModel = userText;
+  let ignoredEmbeddedInstructions = false;
+
   try {
-    await assertChatInputAllowed(userText);
+    const decision = await assertChatInputAllowed(userText, {
+      webSearchEnabled,
+    });
+    textForModel = decision.textForModel;
+    ignoredEmbeddedInstructions = decision.ignoredEmbeddedInstructions;
   } catch (error) {
     if (error instanceof GuardrailTripwireTriggered) {
       throw toInputBlockedError(error, userText);
@@ -305,10 +318,13 @@ export async function streamWorkspaceChat(
     content: userText,
   });
 
+  const modelMessages = ignoredEmbeddedInstructions
+    ? replaceLastUserMessageText(input.messages, textForModel)
+    : input.messages;
   const contextMessages =
-    conversation.summary && input.messages.length > RECENT_MESSAGE_WINDOW
-      ? input.messages.slice(-RECENT_MESSAGE_WINDOW)
-      : input.messages;
+    conversation.summary && modelMessages.length > RECENT_MESSAGE_WINDOW
+      ? modelMessages.slice(-RECENT_MESSAGE_WINDOW)
+      : modelMessages;
 
   let webSearchResults: TavilySearchResponse | null = null;
   let suggestions: string[] = [];
@@ -345,13 +361,13 @@ export async function streamWorkspaceChat(
       const [pipeline, userMemories] = await Promise.all([
         runRagPipeline({
           workspaceId,
-          userText,
+          userText: textForModel,
           conversationSummary: conversation.summary,
-          recentTurns: formatRecentTurns(input.messages),
+          recentTurns: formatRecentTurns(modelMessages),
           webSearchEnabled,
           onTrace: publishTrace,
         }),
-        searchUserMemories(userId, userText),
+        searchUserMemories(userId, textForModel),
       ]);
 
       trace = pipeline.trace;
@@ -380,6 +396,7 @@ export async function streamWorkspaceChat(
           pipeline.queryClass === "summarization" &&
           pipeline.chunks.length > 0,
         researchTopic: pipeline.researchTopic,
+        stateBothSides: asksConflictingValues(textForModel),
       });
 
       const pushStep = (step: RagTraceStep) => {
@@ -516,7 +533,7 @@ export async function streamWorkspaceChat(
           lines: [],
         });
         const grounded = await groundAnswer({
-          question: userText,
+          question: textForModel,
           answer: pii.text,
           chunks: evidenceChunks.map((chunk) => ({
             title: chunk.sourceTitle,
@@ -578,6 +595,18 @@ export async function streamWorkspaceChat(
         });
 
         finalText = released;
+        if (
+          finalText !== OUTPUT_CHECK_FAILED_MESSAGE &&
+          finalText !== OUTPUT_POLICY_MESSAGE
+        ) {
+          finalText = ensureWebSourceMarkers(
+            finalText,
+            webSearchResults?.results.length ?? 0,
+          );
+          if (ignoredEmbeddedInstructions) {
+            finalText = appendEmbeddedInstructionNote(finalText);
+          }
+        }
         citations = await maskCitationExcerpts(
           assembleCitations({
             chunks: chunkCitations,
@@ -637,7 +666,7 @@ export async function streamWorkspaceChat(
           suggestions = prepared;
         } else if (passages.length > 0 || pipeline.researchTopic) {
           suggestions = await suggestFollowUpQuestions({
-            question: pipeline.researchTopic ?? userText,
+            question: pipeline.researchTopic ?? textForModel,
             answer: finalText,
             passages,
             preferNotebook:
