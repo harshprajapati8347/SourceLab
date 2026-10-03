@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useAppRouter } from "@/shared/hooks/use-app-router";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -54,7 +54,7 @@ function AddSourceForm({
   workspaceId: string;
   onDone: () => void;
 }) {
-  const router = useRouter();
+  const router = useAppRouter();
   const createSource = useCreateSource(workspaceId);
   const uploadPdf = useUploadPdfSource(workspaceId);
   const importWebsite = useImportWebsiteSource(workspaceId);

@@ -3,6 +3,7 @@ import { JetBrains_Mono, Manrope } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import QueryProvider from "@/shared/components/providers/query-provider";
+import { NavigationProgress } from "@/shared/components/navigation-progress";
 import { ThemeProvider } from "@/shared/components/providers/theme-provider";
 import { Toaster } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -56,6 +57,7 @@ export default function RootLayout({
           <QueryProvider>
             <TooltipProvider delay={300}>
               <Toaster>{children}</Toaster>
+              <NavigationProgress />
             </TooltipProvider>
           </QueryProvider>
         </ThemeProvider>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useAppRouter } from "@/shared/hooks/use-app-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,7 +43,7 @@ function resolveModel(model: string): ChatModelId {
 export function WorkspaceSettingsForm({
   workspace,
 }: WorkspaceSettingsFormProps) {
-  const router = useRouter();
+  const router = useAppRouter();
   const updateWorkspace = useUpdateWorkspace(workspace.id);
   const deleteWorkspace = useDeleteWorkspace();
   const [deleteOpen, setDeleteOpen] = useState(false);

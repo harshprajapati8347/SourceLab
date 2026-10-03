@@ -93,8 +93,9 @@ Generated shadcn/ui components, retuned to the amber/Manrope identity (radius, b
 | `ShortcutsDialog` (`shortcuts-dialog.tsx`) | `?` dialog listing the keyboard shortcuts. Open state in `ui-store` |
 | `CitedAnswerPreview` (`cited-answer-preview.tsx`) | Static, decorative example of a cited answer with source chips (landing hero, sign-in panel) |
 | `StreamdownContent` (`streamdown-content.tsx`) | Markdown renderer used for streamed text and artifact bodies |
+| `NavigationProgress` (`navigation-progress.tsx`) | 2px amber bar fixed to the top of the viewport during a pathname change. Mounted once in the root layout |
 
-State and hooks: `shared/stores/ui-store.ts` (command palette, shortcuts dialog, create-notebook dialog, add-source dialog, sources panel/sheet; only the desktop panel flag is persisted), `shared/hooks/use-keyboard-shortcuts.ts` (`useKeyboardShortcuts`, `useModKeyLabel`), `shared/hooks/use-mobile.ts`, `shared/hooks/use-debounced-value.ts`.
+State and hooks: `shared/stores/ui-store.ts` (command palette, shortcuts dialog, create-notebook dialog, add-source dialog, sources panel/sheet; only the desktop panel flag is persisted), `shared/hooks/use-keyboard-shortcuts.ts` (`useKeyboardShortcuts`, `useModKeyLabel`), `shared/hooks/use-mobile.ts`, `shared/hooks/use-debounced-value.ts`, `shared/hooks/use-app-router.ts` (`useAppRouter` — `push` / `replace` start the top progress bar when the pathname changes).
 
 ### `features/auth/components/`
 | Component | Description |
@@ -260,6 +261,21 @@ Last updated: 2026-10-02
 | Shadow | none |
 
 **Pattern notes:** Shown only under the latest finished assistant reply. No section label. The card is the button.
+
+### Navigation progress
+
+File: `client/shared/components/navigation-progress.tsx`
+Last updated: 2026-10-03
+
+| Property | Class |
+| --- | --- |
+| Background | none (the bar is the indicator) |
+| Border | none |
+| Border radius | none |
+| Shadow | none |
+| Accent usage | `bg-primary` on the 2px indicator (`h-0.5`) |
+
+**Pattern notes:** One app-wide bar, mounted in the root layout. It runs only while the pathname is changing (links, `useAppRouter` push/replace, back/forward). Same-pathname updates, skeletons, button `Spinner`s, and toasts stay as they are. Do not reuse `components/ui/progress.tsx` for this; that primitive is a labeled, value-based control. The bar waits 150ms before it appears so a fast navigation does not flash.
 
 ---
 

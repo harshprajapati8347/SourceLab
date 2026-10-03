@@ -7,7 +7,7 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 ## Current Status
 
 **Phase:** Auth (Google + email/password), workspaces, sources/RAG, chat with query and context intelligence, learning artifacts, memory, billing (Stripe Pro) + credits.
-**Last completed:** Frontend revamp — dark-first amber/Manrope design system, new workspace shell with a sources panel, command palette and shortcuts, toasts, restyled pages, and a lint/type/build-clean client.
+**Last completed:** Global top progress bar on client pathname changes (links, programmatic push/replace, back/forward). In-page skeletons and button spinners are unchanged.
 **Next:** Operator setup — Resend domain, Stripe test Product/Price (`STRIPE_PRO_PRICE_ID`), webhook to Express `/api/auth/stripe/webhook`. See `context/billing-and-credits.md`.
 
 ---
@@ -33,6 +33,9 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 - [x] Delete cascades to sources, conversations, artifacts (Prisma cascade) and best-effort deletes the Pinecone namespace
 - [x] Per-workspace settings: title, description, icon, default chat model
 - [x] Dashboard grid UI with empty/loading/error states
+
+### App chrome
+- [x] Global top progress bar while a client navigation changes the pathname. Same-pathname updates (including chat stripping `?ask=`) do not start it
 
 ### Sources
 - [x] Five ingestion types: Text, Markdown, PDF upload (Cloudinary), Website (Firecrawl), YouTube (transcript)
@@ -135,6 +138,7 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 
 - **Amber is a fill, not a text colour** — `text-primary-ink` carries amber text so light mode keeps AA contrast. The docs' hard-coded hex values, forced dark theme, Clerk, and ChaibookLM-only features (favorites, archive, admin logs, podcast, dashboard storage stats) were not copied.
 - **Chat is never gated by indexing** — the docs lock chat until every source is ready. SourceLab keeps the composer enabled and shows `SourceStatusBanner` instead, since the backend answers from whatever is already indexed.
+- **Top progress bar is pathname navigation only** — a 2px `bg-primary` bar fixed to the viewport (`NavigationProgress`). It starts on `next/link`, `useAppRouter` push/replace, and back/forward, waits 150ms so fast navigations stay invisible, trickles until `usePathname()` changes, and gives up after 8s if the route never commits. Skeletons, spinners, toasts, polling, and chat streaming are not wired to it. `components/ui/progress.tsx` stays the unused form control.
 - **A notebook opens its latest chat** — reload, returning from Sources, and other navigation do not start a conversation. New Chat, or the first message when the notebook has no chats, is what creates one. At 10 stored messages (user and assistant) the composer stops, and the API rejects another turn before retrieval or a credit charge.
 - **Web search toggle reads `byWorkspace`** — selecting `getPrefs` does not re-render, because that function identity never changes. The first paint stays off until persistence hydrates, so the server HTML matches. The send body reads the same store when the message is sent. Cited web pages are streamed as `data-citations` with the reply, and each `[W#]` matches the merged result list.
 - **Workspace pages share one shell via a layout** — `getSession` and `getWorkspaceOrNull` are wrapped in React `cache()` so the layout and page share one fetch. `WorkspaceShell` reads the workspace through `useWorkspace(id, initialData)` so renames show up without a server refetch.

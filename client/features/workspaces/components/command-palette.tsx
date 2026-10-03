@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useAppRouter } from "@/shared/hooks/use-app-router";
 import {
   BookOpenIcon,
   BrainIcon,
@@ -41,7 +41,7 @@ type CommandPaletteProps = {
 };
 
 export function CommandPalette({ workspaceId }: CommandPaletteProps) {
-  const router = useRouter();
+  const router = useAppRouter();
   const { setTheme } = useTheme();
   const open = useUIStore((state) => state.commandOpen);
   const setOpen = useUIStore((state) => state.setCommandOpen);

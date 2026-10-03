@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useQueryClient } from "@tanstack/react-query";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { useAppRouter } from "@/shared/hooks/use-app-router";
 import {
   DownloadIcon,
   MessageSquarePlusIcon,
@@ -224,7 +225,7 @@ export function WorkspaceChat({
   defaultModel,
 }: WorkspaceChatProps) {
   const queryClient = useQueryClient();
-  const router = useRouter();
+  const router = useAppRouter();
   const searchParams = useSearchParams();
   const askPrompt = searchParams.get("ask");
   const handledAskPrompt = useRef<string | null>(null);

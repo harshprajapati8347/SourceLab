@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useAppRouter } from "@/shared/hooks/use-app-router";
 import { PlusIcon, SearchIcon, XIcon } from "lucide-react";
 import { billingRoutes } from "@/features/billing/lib/routes";
 import { useBilling } from "@/features/billing/hooks/use-billing";
@@ -91,7 +91,7 @@ function StatStrip({ notebookCount }: { notebookCount: number | undefined }) {
 }
 
 export function DashboardHome({ userName }: DashboardHomeProps) {
-  const router = useRouter();
+  const router = useAppRouter();
   const { data: workspaces, isLoading, error, refetch } = useWorkspaces();
   const createWorkspace = useCreateWorkspace();
   const [search, setSearch] = useState("");
@@ -136,7 +136,6 @@ export function DashboardHome({ userName }: DashboardHomeProps) {
     <div className="min-h-svh bg-background">
       <AppHeader />
 
-
       <main className="mx-auto max-w-6xl px-4 py-8 md:px-8 md:py-10">
         <section className="mb-8 grid gap-6 md:grid-cols-[1fr_minmax(0,22rem)] md:items-end">
           <div className="space-y-2">
@@ -160,7 +159,7 @@ export function DashboardHome({ userName }: DashboardHomeProps) {
               Notebooks
             </h2>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2" suppressHydrationWarning>
               <div className="relative w-full sm:w-64">
                 <SearchIcon
                   aria-hidden="true"
@@ -237,7 +236,9 @@ export function DashboardHome({ userName }: DashboardHomeProps) {
           ) : isSearching && filteredWorkspaces.length === 0 ? (
             <Empty className="border">
               <EmptyHeader>
-                <EmptyTitle>No notebook matches “{debouncedSearch.trim()}”</EmptyTitle>
+                <EmptyTitle>
+                  No notebook matches “{debouncedSearch.trim()}”
+                </EmptyTitle>
                 <EmptyDescription>
                   Try a different word, or clear the search.
                 </EmptyDescription>

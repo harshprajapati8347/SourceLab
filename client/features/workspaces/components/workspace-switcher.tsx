@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useAppRouter } from "@/shared/hooks/use-app-router";
 import { PlusIcon, SearchIcon } from "lucide-react";
 import {
   SidebarGroup,
@@ -26,7 +26,7 @@ type WorkspaceSwitcherProps = {
 export function WorkspaceSwitcher({
   activeWorkspaceId,
 }: WorkspaceSwitcherProps) {
-  const router = useRouter();
+  const router = useAppRouter();
   const { data: workspaces, isLoading, error } = useWorkspaces();
   const setCreateWorkspaceOpen = useUIStore(
     (state) => state.setCreateWorkspaceOpen,
