@@ -1,0 +1,28 @@
+{
+  "search.exclude": {
+    "**/.git": true,
+    "**/.agents": true,
+    "**/.claude": true,
+    "**/.next": true,
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/build": true,
+    "**/out": true,
+    "**/coverage": true,
+    "**/.turbo": true,
+    "**/.vercel": true,
+    "**/.cache": true,
+    "**/.output": true,
+    "**/.pytest_cache": true,
+    "**/__pycache__": true,
+    "**/server/src/generated/prisma/**": true,
+    "**/context/**": true,
+    "**/pnpm-lock.yaml": true,
+    "**/package-lock.json": true,
+    "**/yarn.lock": true,
+    "**/*.tsbuildinfo": true,
+    "**/*.map": true,
+    "**/*.log": true,
+    "**/logs/**": true
+  }
+}
