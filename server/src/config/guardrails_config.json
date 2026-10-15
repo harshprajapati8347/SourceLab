@@ -13,7 +13,23 @@
       },
       {
         "name": "Moderation",
-        "config": {}
+        "config": {
+          "categories": [
+            "sexual",
+            "sexual/minors",
+            "hate",
+            "hate/threatening",
+            "harassment",
+            "harassment/threatening",
+            "self-harm",
+            "self-harm/intent",
+            "self-harm/instructions",
+            "violence",
+            "violence/graphic",
+            "illicit",
+            "illicit/violent"
+          ]
+        }
       }
     ]
   },
