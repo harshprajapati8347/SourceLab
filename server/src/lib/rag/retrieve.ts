@@ -141,10 +141,55 @@ export function mergeRetrievedChunks(groups: RetrievedChunk[][]) {
  * @param chunks - Scored chunks
  * @returns At most {@link RAG_MERGED_CHUNK_CAP} chunks
  */
-export function capChunks(chunks: RetrievedChunk[]) {
-  return [...chunks]
-    .sort((left, right) => right.score - left.score)
+export function capChunks(
+  chunks: RetrievedChunk[],
+  pinnedIds: ReadonlySet<string> = new Set(),
+) {
+  const sorted = [...chunks].sort((left, right) => right.score - left.score);
+  const pinned = sorted.filter((chunk) => pinnedIds.has(chunk.chunkId));
+  const rest = sorted
+    .filter((chunk) => !pinnedIds.has(chunk.chunkId))
     .slice(0, RAG_MERGED_CHUNK_CAP);
+
+  return [...pinned, ...rest];
+}
+
+export type LexicalChunkRow = {
+  id: string;
+  index: number;
+  content: string;
+  metadata: unknown;
+  source: {
+    id: string;
+    title: string;
+    type: string;
+  };
+};
+
+/**
+ * Maps workspace chunk rows into retrieval hits.
+ *
+ * The score is the normal similarity floor so a lexical hit does not outrank
+ * a stronger vector hit. Callers pin the ids so the cap cannot drop them.
+ *
+ * @param rows - Chunks loaded for missing question terms
+ * @returns Retrieval chunks in row order
+ */
+export function chunksFromLexicalRows(rows: LexicalChunkRow[]) {
+  return rows.map((row) => {
+    const page = pageFromMetadata(row.metadata);
+
+    return {
+      sourceId: row.source.id,
+      sourceTitle: row.source.title,
+      sourceType: row.source.type,
+      chunkId: row.id,
+      chunkIndex: row.index,
+      ...(page !== undefined ? { page } : {}),
+      text: row.content,
+      score: RAG_MIN_SCORE,
+    };
+  });
 }
 
 export type UserMemoryContext = string;

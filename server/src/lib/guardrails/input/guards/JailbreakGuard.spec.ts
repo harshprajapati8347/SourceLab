@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+/// <reference types="vitest/globals" />
 import { JailbreakGuard } from './JailbreakGuard';
 import { GuardDecision } from '../../../core/models';
 

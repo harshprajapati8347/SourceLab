@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+/// <reference types="vitest/globals" />
 import { InputGuardService } from './InputGuardService';
 import { GuardrailsConfig } from '../../config/guardrails';
 import { InputGuardError } from '../../shared/errors';

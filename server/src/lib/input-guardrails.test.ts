@@ -1,5 +1,5 @@
+/// <reference types="vitest/globals" />
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
 import { InputBlockedError } from "../types/app-error.js";
 import { assertChatInputAllowed } from "./input-guardrails.js";
 

@@ -12,6 +12,10 @@ import { RAG_INTELLIGENCE_MODEL } from "../ai-config.js";
 
 export const UNSUPPORTED_SOURCES_MESSAGE =
   "I can't support an answer from the sources retrieved for this question because they are not sufficient to support the answer.";
+
+/** Added when some claims are supported and the rest were removed. */
+export const PARTIAL_GROUNDING_NOTE =
+  "The retrieved sources do not establish the remaining part of this question.";
 // "I can't support an answer from the sources retrieved for this question.";
 
 export type GroundingVerdict =
@@ -190,9 +194,10 @@ export function settleGrounding(
     supported.length,
     meaningful.length,
   );
+  const text = appendPartialGap(released.text, verdict, released.withheld);
 
   return {
-    text: released.text,
+    text,
     verdict,
     withheld: released.withheld,
     claims: meaningful.map((claim) => ({
@@ -294,11 +299,79 @@ function classifyClaim(
     };
   }
 
+  if (!claim.supported && !claimWordsInPassage(claim.span, cited)) {
+    return {
+      span: claim.span,
+      supported: false,
+      reason: "evidence does not support the claim",
+    };
+  }
+
   return {
     span: claim.span,
     supported: true,
     reason: markers.map((marker) => `[${marker}]`).join(", "),
   };
+}
+
+const CLAIM_STOPWORDS = new Set([
+  "they",
+  "them",
+  "their",
+  "this",
+  "that",
+  "those",
+  "these",
+  "with",
+  "from",
+  "into",
+  "your",
+  "have",
+  "been",
+  "each",
+  "only",
+]);
+
+/**
+ * Whether a cited sentence uses the passage's own content words.
+ *
+ * A judge rejection is kept when those words are present. A paraphrase that
+ * only shares a pronoun or one leftover word is not.
+ *
+ * @param span - One sentence from the answer
+ * @param evidenceText - Text of the cited chunk or web snippet
+ * @returns True when the passage states the same content words
+ */
+function claimWordsInPassage(span: string, evidenceText: string) {
+  const words = span
+    .toLowerCase()
+    .replace(/\[w?\d+\]/gi, " ")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((word) => word.length > 3 && !CLAIM_STOPWORDS.has(word));
+  if (words.length === 0) {
+    return true;
+  }
+
+  const haystack = evidenceText.toLowerCase();
+  const found = words.filter((word) => haystack.includes(word));
+  if (found.length === words.length) {
+    return true;
+  }
+
+  return found.length >= 2 && found.length * 2 >= words.length;
+}
+
+function appendPartialGap(
+  text: string,
+  verdict: GroundingVerdict,
+  withheld: boolean,
+) {
+  if (withheld || verdict !== "PARTIALLY_SUPPORTED" || isAbsenceStatement(text)) {
+    return text;
+  }
+
+  return `${text.trim()}\n\n${PARTIAL_GROUNDING_NOTE}`;
 }
 
 function verdictFor(supported: number, total: number): GroundingVerdict {

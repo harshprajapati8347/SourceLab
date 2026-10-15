@@ -14,6 +14,7 @@ import {
   RAG_MAX_SUBQUESTIONS,
 } from "../ai-config.js";
 import { logRagEvent } from "./rag-log.js";
+import { questionContentTerms } from "./topic-gap.js";
 
 export const QUERY_CLASSES = [
   "simple_factual",
@@ -67,8 +68,10 @@ const correctiveSchema = z.object({
 /**
  * Classifies a user message and builds the first-pass retrieval queries.
  *
- * HyDE runs only for simple factual and ambiguous questions. A failed
- * classification or HyDE call falls open to embedding the original message.
+ * HyDE runs for ambiguous questions and for simple factual questions that
+ * depend on earlier turns. A standalone simple question searches the original
+ * text. A failed classification or HyDE call falls open to embedding the
+ * original message.
  *
  * @param input - Latest user text plus conversation summary and recent turns
  * @returns Retrieval plan. `retrievalQueries` is empty when retrieval is skipped
@@ -122,6 +125,51 @@ export async function planQuery(input: {
     logRagEvent("classification", { fallback: true });
     return fallbackQueryPlan(input.userText, "classification");
   }
+}
+
+/**
+ * Keeps a corrective rewrite only when it still contains the original terms.
+ *
+ * A rewrite that drops those terms is discarded. The search uses the original
+ * question, any expansion that keeps the terms, and the terms still missing
+ * from the passages.
+ *
+ * @param input - Original question, model rewrite, expansions, and missing terms
+ * @returns Queries for the single corrective pass
+ */
+export function correctiveRetrievalQueries(input: {
+  userText: string;
+  rewrittenQuery: string;
+  expansions: string[];
+  missingTerms: string[];
+}) {
+  const original =
+    sanitizeRetrievalQuery(input.userText.trim()) || input.userText.trim();
+  const originalTerms = questionContentTerms(original);
+  const keepsTerms = (query: string) =>
+    originalTerms.every((term) => query.toLowerCase().includes(term));
+  const rewrite =
+    sanitizeRetrievalQuery(input.rewrittenQuery.trim()) || original;
+  const rewriteKept = keepsTerms(rewrite);
+  const expansions = uniqueQueries(
+    input.expansions.map((query) => sanitizeRetrievalQuery(query)),
+  ).filter((query) => keepsTerms(query));
+  const missing = uniqueQueries(input.missingTerms);
+
+  return {
+    rewrittenQuery: rewriteKept ? rewrite : original,
+    droppedRewrite: !rewriteKept,
+    retrievalQueries: uniqueQueries([
+      original,
+      ...(rewriteKept ? [rewrite] : []),
+      ...expansions,
+      ...(missing.length > 0 ? [missing.join(" ")] : []),
+    ]),
+    transforms: [
+      "corrective_rewrite",
+      ...(expansions.length > 0 ? (["query_expansion"] as const) : []),
+    ] satisfies QueryTransform[],
+  };
 }
 
 /**
@@ -227,18 +275,20 @@ export function routeQuery(userText: string, classification: Classification) {
   }
 
   if (queryClass === "multi_hop" || queryClass === "analytical") {
+    const parts = subqueries.length > 0 ? subqueries : [rewritten];
     return decision({
       transforms: ["subquestion_decomposition"],
-      queries: subqueries.length > 0 ? subqueries : [rewritten],
+      queries: queriesWithOriginal(parts, userText),
       skipRetrieval: false,
       useHyde: false,
     });
   }
 
   if (queryClass === "comparative") {
+    const parts = subqueries.length > 0 ? subqueries : [rewritten];
     return decision({
       transforms: ["multi_query"],
-      queries: subqueries.length > 0 ? subqueries : [rewritten],
+      queries: queriesWithOriginal(parts, userText),
       skipRetrieval: false,
       useHyde: false,
     });
@@ -268,16 +318,28 @@ export function routeQuery(userText: string, classification: Classification) {
 
   const searchable =
     sanitizeRetrievalQuery(userText.trim()) || userText.trim();
-  const transforms: QueryTransform[] = classification.dependsOnHistory
-    ? ["contextual_rewrite", "hyde"]
-    : ["hyde"];
+
+  if (!classification.dependsOnHistory) {
+    return decision({
+      transforms: [],
+      queries: [searchable],
+      skipRetrieval: false,
+      useHyde: false,
+    });
+  }
 
   return decision({
-    transforms,
-    queries: [classification.dependsOnHistory ? rewritten : searchable],
+    transforms: ["contextual_rewrite", "hyde"],
+    queries: [rewritten],
     skipRetrieval: false,
     useHyde: true,
   });
+}
+
+function queriesWithOriginal(queries: string[], userText: string) {
+  const original =
+    sanitizeRetrievalQuery(userText.trim()) || userText.trim();
+  return uniqueQueries([...queries, original]);
 }
 
 /**

@@ -1,5 +1,5 @@
+/// <reference types="vitest/globals" />
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
 import {
   formatCitationCoverage,
   settleGrounding,
@@ -41,6 +41,10 @@ describe("grounding", () => {
     assert.doesNotMatch(result.text, /Pune/);
     assert.doesNotMatch(result.text, /Initech/);
     assert.equal(result.verdict, "PARTIALLY_SUPPORTED");
+    assert.match(
+      result.text,
+      /The retrieved sources do not establish the remaining part of this question/,
+    );
     assert.equal(result.coverage.summary, "1 / 3 = 33.3%");
     assert.ok(
       result.citations.lines.some((line) =>
@@ -212,7 +216,7 @@ describe("citation coverage", () => {
     assert.equal(result.verdict, "SUPPORTED");
   });
 
-  it("keeps a paraphrased web sentence when that snippet was retrieved", () => {
+  it("removes a paraphrase the cited page does not state", () => {
     const result = settleGrounding(
       "Customers pay for the time they use [W1].",
       [
@@ -225,8 +229,9 @@ describe("citation coverage", () => {
       new Map([["W1", "AWS bills customers for the hours they use."]]),
     );
 
-    assert.match(result.text, /Customers pay for the time they use \[W1\]/);
-    assert.equal(result.withheld, false);
+    assert.equal(result.text, UNSUPPORTED_SOURCES_MESSAGE);
+    assert.equal(result.verdict, "UNSUPPORTED");
+    assert.equal(result.withheld, true);
   });
 
   it("removes a number the cited passage does not contain", () => {

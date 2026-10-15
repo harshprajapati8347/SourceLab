@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+/// <reference types="vitest/globals" />
 import { HallucinatedCitationGuard } from './HallucinatedCitationGuard';
 import { ChatResponse, GuardDecision } from '../../../core/models';
 

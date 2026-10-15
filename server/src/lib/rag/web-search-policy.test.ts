@@ -1,5 +1,5 @@
+/// <reference types="vitest/globals" />
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
 import { assembleCitations, pruneUnsupportedWebMarkers } from "./citations.js";
 import type { TavilySearchResponse } from "../tavily.js";
 import { keepUsableWebResults } from "../tavily.js";
@@ -144,6 +144,21 @@ describe("web search consent", () => {
       WebSearchNotAuthorizedError,
     );
     assert.equal(called, false);
+  });
+
+  it("answers when the passages contain the question even if coverage is low", () => {
+    assert.equal(
+      retrievalDisposition({
+        queryClass: "simple_factual",
+        question: "What encryption standard is used for data at rest?",
+        chunkTexts: [
+          "The encryption standard used for data at rest is AES-256.",
+        ],
+        coverage: 0.2,
+        sharesSubject: true,
+      }),
+      "answer",
+    );
   });
 
   it("answers from workspace evidence without asking for web search", () => {

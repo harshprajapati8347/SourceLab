@@ -26,10 +26,20 @@ export const RAG_MIN_SCORE = 0.35;
 export const RAG_INTELLIGENCE_MODEL = "gpt-4o-mini";
 
 /**
- * Retrieval-quality gate. A score below this runs one corrective retrieval pass.
- * Contradiction is not part of this average.
+ * Informational average of relevance, coverage, freshness, authority, and
+ * duplication. Contradiction is not part of this average. It does not decide
+ * whether to retrieve again.
  */
 export const RAG_QUALITY_GATE = 0.55;
+
+/**
+ * Share of question terms that must appear in the passages before a low
+ * coverage score can be ignored and the chunks kept for generation.
+ */
+export const RAG_SUPPORTING_TERM_RATIO = 0.5;
+
+/** Maximum chunks loaded from Postgres when a question term is missing. */
+export const RAG_LEXICAL_LIMIT = 4;
 
 /**
  * Coverage below this means the retrieved passages do not answer the question.

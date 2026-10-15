@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "test": "tsx --test src/lib/output-guardrails.test.ts src/lib/input-guardrails.test.ts src/lib/guardrails/input/InputGuardService.test.ts src/lib/guardrails/output/OutputGuardService.test.ts src/lib/tavily.test.ts src/lib/rag/answer-grounding.test.ts src/lib/rag/overview.test.ts src/lib/rag/query-intelligence.test.ts src/lib/rag/topic-gap.test.ts src/lib/rag/suggested-questions.test.ts src/lib/rag/request-disposition.test.ts src/lib/rag/web-search-policy.test.ts",
+    "test": "vitest run",
     "test:guardrails": "vitest run src/lib/guardrails",
     "build": "prisma generate && tsc",
     "start": "prisma migrate deploy && node dist/index.js",
@@ -54,6 +54,7 @@
     "inngest-cli": "^1.41.1",
     "tsx": "^4.23.12",
     "typescript": "^5.9.2",
+    "vite": "^6.4.1",
     "vitest": "^5.0.4"
   },
   "packageManager": "pnpm@11.5.2",

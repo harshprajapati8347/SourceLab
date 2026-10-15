@@ -17,7 +17,9 @@ import {
 import {
   RAG_DEDUP_THRESHOLD,
   RAG_INTELLIGENCE_MODEL,
+  RAG_MIN_SCORE,
   RAG_NEUTRAL_FRESHNESS,
+  RAG_TOPIC_COVERAGE_FLOOR,
 } from "../ai-config.js";
 import {
   deduplicateChunks,
@@ -155,6 +157,66 @@ export function gateScore(dimensions: QualityDimensions) {
       clamp01(dimensions.duplication)) /
     5
   );
+}
+
+export const CORRECTION_REASONS = ["low_coverage", "low_relevance"] as const;
+
+export type CorrectionReason = (typeof CORRECTION_REASONS)[number];
+
+/**
+ * Reasons to run the one corrective retrieval pass.
+ *
+ * Freshness, authority, and duplication stay on the trace. They do not
+ * start another search.
+ *
+ * @param dimensions - Scores from 0 to 1
+ * @returns Coverage or similarity failures, in that order
+ */
+export function correctionReasons(
+  dimensions: QualityDimensions,
+): CorrectionReason[] {
+  const reasons: CorrectionReason[] = [];
+
+  if (clamp01(dimensions.coverage) < RAG_TOPIC_COVERAGE_FLOOR) {
+    reasons.push("low_coverage");
+  }
+
+  if (clamp01(dimensions.relevance) < RAG_MIN_SCORE) {
+    reasons.push("low_relevance");
+  }
+
+  return reasons;
+}
+
+/**
+ * Whether coverage or similarity is too low for the current passages.
+ *
+ * @param dimensions - Scores from 0 to 1
+ * @returns True when one corrective pass is worth attempting
+ */
+export function needsCorrectiveRetrieval(dimensions: QualityDimensions) {
+  return correctionReasons(dimensions).length > 0;
+}
+
+/**
+ * Decides whether this turn may still retrieve again.
+ *
+ * The corrective pass runs once. A later low score stops, and the passages
+ * already collected are what generation or the gap reply uses.
+ *
+ * @param attempted - True after the corrective pass has already run
+ * @param dimensions - Scores from the latest retrieval
+ * @returns The next retrieval action
+ */
+export function correctionDecision(
+  attempted: boolean,
+  dimensions: QualityDimensions,
+): "retrieve" | "use-evidence" | "exhausted" {
+  if (!needsCorrectiveRetrieval(dimensions)) {
+    return "use-evidence";
+  }
+
+  return attempted ? "exhausted" : "retrieve";
 }
 
 async function judgeEvidence(

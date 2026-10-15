@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+/// <reference types="vitest/globals" />
 import { PiiGuard, type DetectedItem } from './PiiGuard';
 import { GuardDecision } from '../../../core/models';
 

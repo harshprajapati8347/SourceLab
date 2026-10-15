@@ -57,3 +57,49 @@ export function findChunksBySourceId(sourceId: string) {
     orderBy: { index: "asc" },
   });
 }
+
+/**
+ * Loads ready chunks in one workspace whose text contains a missing term.
+ *
+ * @param workspaceId - Workspace that owns the sources
+ * @param terms - Words or numbers absent from the vector hits
+ * @param limit - Maximum rows to return
+ * @returns Matching chunks with their source title and type
+ */
+export function findChunksByContentTerms(
+  workspaceId: string,
+  terms: string[],
+  limit: number,
+) {
+  const unique = [
+    ...new Set(terms.map((term) => term.trim()).filter((term) => term.length > 1)),
+  ].slice(0, 8);
+
+  if (unique.length === 0 || limit <= 0) {
+    return Promise.resolve([]);
+  }
+
+  return prisma.sourceChunk.findMany({
+    where: {
+      source: { workspaceId, status: "READY" },
+      OR: unique.map((term) => ({
+        content: { contains: term, mode: "insensitive" as const },
+      })),
+    },
+    take: limit,
+    orderBy: { index: "asc" },
+    select: {
+      id: true,
+      index: true,
+      content: true,
+      metadata: true,
+      source: {
+        select: {
+          id: true,
+          title: true,
+          type: true,
+        },
+      },
+    },
+  });
+}

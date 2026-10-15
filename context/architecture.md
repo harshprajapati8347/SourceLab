@@ -168,21 +168,29 @@ runRagPipeline():
   - gpt-4o-mini classifies the latest message (summary + recent turns) and routes transforms
   - conversational: skip workspace retrieval. Out-of-domain questions are still searched
   - a short "yes" after the latest web-research offer searches the web for that topic, even if the toggle is off. Sending that topic again searches only when the toggle is on. An older yes does not apply to a new question
-  - otherwise embed one or more queries (HyDE passage + query for simple factual and ambiguous;
-    sub-questions for multi-hop, analytical, and comparative) → Pinecone, merge by chunk id
+  - otherwise embed one or more queries. A standalone simple question searches the original
+    text and skips HyDE. Ambiguous questions, and simple questions that depend on earlier turns,
+    still use a hypothetical passage. Multi-hop, analytical, and comparative questions search
+    the sub-questions and the original question. Results merge by chunk id
+  - when a question term or number is missing from those hits, one workspace-scoped Postgres
+    lookup loads up to 4 ready chunks that contain it. Those chunks stay in the prompt even
+    if their similarity is below the merged cap
   - a question that names two numbers, such as "50 or 100", also searches each number and keeps both passages when they differ
   - load source rows for authority + indexedAt, then score relevance, coverage, freshness,
-    authority, and duplication. Below 0.55, or when the passages miss the topic: one rewrite/expand
-    pass at a relaxed score floor. If the workspace subject is present and the asked fact is not,
-    the reply says the sources do not specify that fact. If the question is a current or official
-    external fact and web search is on, Tavily runs immediately. Otherwise the reply names the
-    gap, the notebook's focus, and asks before any search. Tavily also runs
-    immediately for a weak but on-topic retrieval when web search is already enabled.
-    Classifier and quality-judgement fallbacks use that same gap check, so an empty retrieval
-    is not answered from general knowledge
+    authority, and duplication. The five-way average is informational. One rewrite runs only
+    when coverage is below 0.35 or mean similarity is below 0.35. A rewrite that drops the
+    original terms is discarded. The pass runs once, then stops. Chunks that still contain at
+    least half of the question terms are kept for generation even if coverage is low.
+    If the workspace subject is present and the asked fact is not, the reply says the sources
+    do not specify that fact. If the question is a current or official external fact and web
+    search is on, Tavily runs immediately. Otherwise the reply names the gap, the notebook's
+    focus, and asks before any search. Tavily also runs immediately for a weak but on-topic
+    retrieval when web search is already enabled. Disabled web search is not called.
+    Classifier and quality-judgement fallbacks keep the passages already retrieved and do not
+    report a perfect score, so an empty retrieval is not answered from general knowledge
   - semantic dedup, extractive compression, contradiction notes. Chunk text stays verbatim.
     Source text is untrusted data. The chat gate does not rewrite a request to obey instructions inside a document.
-  - on classifier, HyDE, or coverage-judgement failure: fall open to one top-6 retrieval of the original message
+  - on classifier, HyDE, or coverage-judgement failure: keep the retrieved passages, with gate score 0 when the judgement itself failed
         ↓
 streamWorkspaceChat() continues:
   - buildChatSystemPrompt() from compressed chunks, authority metadata, conflicts,

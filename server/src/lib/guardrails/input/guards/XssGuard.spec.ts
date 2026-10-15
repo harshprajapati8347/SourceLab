@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+/// <reference types="vitest/globals" />
 import { XssGuard } from './XssGuard';
 import { GuardDecision } from '../../../core/models';
 

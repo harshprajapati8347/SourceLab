@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+/// <reference types="vitest/globals" />
 import { MaxLengthGuard } from './MaxLengthGuard';
 import { GuardDecision } from '../../../core/models';
 

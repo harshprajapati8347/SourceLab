@@ -117,7 +117,7 @@ export async function embedChunksForDedup(chunks: EnrichedChunk[]) {
 }
 
 /**
- * Orders chunks by relevance, authority, and freshness, then keeps text inside a character budget.
+ * Orders chunks by similarity, then authority, then freshness, and keeps text inside a character budget.
  *
  * Chunks listed in `pinnedIds` are always kept, even when they exceed the budget,
  * so conflicting evidence is not dropped.
@@ -129,7 +129,7 @@ export async function embedChunksForDedup(chunks: EnrichedChunk[]) {
  */
 export function compressChunks(
   chunks: EnrichedChunk[],
-  pinnedIds: Set<string>,
+  pinnedIds: ReadonlySet<string>,
   budget: number,
 ) {
   const pinned = chunks
@@ -171,9 +171,9 @@ function compareChunkPriority(left: EnrichedChunk, right: EnrichedChunk) {
 }
 
 function compareChunkRank(left: EnrichedChunk, right: EnrichedChunk) {
-  return chunkRank(right) - chunkRank(left);
-}
-
-function chunkRank(chunk: EnrichedChunk) {
-  return chunk.score * chunk.authorityWeight * chunk.freshness;
+  return (
+    right.score - left.score ||
+    right.authorityWeight - left.authorityWeight ||
+    right.freshness - left.freshness
+  );
 }

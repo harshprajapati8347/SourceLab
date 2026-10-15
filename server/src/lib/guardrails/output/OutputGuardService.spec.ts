@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+/// <reference types="vitest/globals" />
 import { OutputGuardService } from './OutputGuardService';
 import { GuardrailsConfig } from '../../config/guardrails';
 import { ChatResponse } from '../../core/models';

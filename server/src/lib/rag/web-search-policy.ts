@@ -10,9 +10,11 @@ import {
   searchWeb,
   type TavilySearchResponse,
 } from "../tavily.js";
+import { RAG_SUPPORTING_TERM_RATIO } from "../ai-config.js";
 import {
   questionTermsMissing,
   sourcesMissTopic,
+  supportingTermRatio,
   buildUncoveredTopicReply,
   pendingWebResearchTopic,
   acceptsWebResearch,
@@ -83,9 +85,10 @@ export function acceptedResearchTopic(input: {
 /**
  * Whether workspace passages are enough to answer, or the user should be asked first.
  *
- * A conversational turn is always answered. A shared subject with a missing fact
- * stays on the insufficient-evidence reply. Anything else that misses the question
- * asks for web research and does not search.
+ * A conversational turn is always answered. Passages that contain at least half
+ * of the question terms are answered even when coverage is low. A shared subject
+ * with a missing fact stays on the insufficient-evidence reply. Anything else
+ * that misses the question asks for web research and does not search.
  *
  * @param input - Query class, question, passage text, coverage, and subject overlap
  * @returns The retrieval outcome for this turn
@@ -98,6 +101,14 @@ export function retrievalDisposition(input: {
   sharesSubject: boolean;
 }): RetrievalDisposition {
   if (input.queryClass === "conversational") {
+    return "answer";
+  }
+
+  if (
+    input.chunkTexts.length > 0 &&
+    supportingTermRatio(input.question, input.chunkTexts) >=
+      RAG_SUPPORTING_TERM_RATIO
+  ) {
     return "answer";
   }
 

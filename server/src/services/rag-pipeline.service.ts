@@ -9,8 +9,9 @@ import {
   RAG_CONTEXT_CHAR_BUDGET,
   RAG_CORRECTIVE_MIN_SCORE,
   RAG_DEDUP_THRESHOLD,
+  RAG_LEXICAL_LIMIT,
+  RAG_MIN_SCORE,
   RAG_NEUTRAL_FRESHNESS,
-  RAG_QUALITY_GATE,
   RAG_TOPIC_COVERAGE_FLOOR,
 } from "../lib/ai-config.js";
 import {
@@ -24,6 +25,7 @@ import {
   embedChunksForDedup,
 } from "../lib/rag/context-intelligence.js";
 import {
+  correctiveRetrievalQueries,
   planCorrectiveQueries,
   planQuery,
   type QueryClass,
@@ -34,6 +36,7 @@ import { createRagTrace, type RagTrace, type RagTraceRecorder } from "../lib/rag
 import { logRagEvent } from "../lib/rag/rag-log.js";
 import {
   capChunks,
+  chunksFromLexicalRows,
   mergeOverviewChunks,
   mergeRetrievedChunks,
   retrieveMergedWorkspaceContext,
@@ -55,8 +58,7 @@ import {
 import {
   buildUncoveredTopicReply,
   focusFromTitles,
-  questionTermsMissing,
-  sourcesMissTopic,
+  missingRetrievalTerms,
   topicFromQuestion,
   WEB_RESEARCH_ACCEPTANCE,
 } from "../lib/rag/topic-gap.js";
@@ -67,7 +69,10 @@ import {
   settleWebSearch,
 } from "../lib/rag/web-search-policy.js";
 import {
+  correctionDecision,
+  correctionReasons,
   evaluateRetrievalQuality,
+  needsCorrectiveRetrieval,
   type Contradiction,
   type RetrievalQuality,
   type WebSnippet,
@@ -76,6 +81,7 @@ import {
   findReadySourcesWithChunks,
   findSourcesByIds,
 } from "../repositories/source.repository.js";
+import { findChunksByContentTerms } from "../repositories/source-chunk.repository.js";
 import { type TavilySearchResponse } from "../lib/tavily.js";
 
 export type RagPipelineResult = {
@@ -103,14 +109,16 @@ export type RagPipelineResult = {
 /**
  * Runs query and context intelligence for one workspace chat turn.
  *
- * Classification, HyDE, and coverage failures fall open to ordinary retrieval,
- * then a gap reply when those passages still miss the question. A low gate
- * score runs one rewrite-and-expand pass, then Tavily only when web search is
- * already enabled. A current external question searches the web when the topic
- * is still missing and the toggle is on. A workspace subject with a missing
- * fact gets an insufficient-evidence reply. An uncovered topic asks before any
- * search. A short yes, or the same topic sent again with the toggle on, searches
- * that topic only. An explicit numeric conflict keeps both passages.
+ * Classification and HyDE failures fall open to the passages already retrieved
+ * and do not report a perfect score. A coverage judgement failure does the same.
+ * One rewrite runs when coverage or similarity is low. Freshness and authority
+ * do not start that pass. A workspace lookup fills a missing question term.
+ * Passages that still contain the question are kept. A current external question
+ * searches the web when the topic is still missing and the toggle is on. A
+ * workspace subject with a missing fact gets an insufficient-evidence reply.
+ * An uncovered topic asks before any search. A short yes, or the same topic sent
+ * again with the toggle on, searches that topic only. An explicit numeric
+ * conflict keeps both passages.
  *
  * @param input - Workspace, user text, conversation context, and web-search flag
  * @returns Chunks, conflicts, and web results ready for the system prompt
@@ -267,13 +275,27 @@ export async function runRagPipeline(input: {
     }
   }
 
-  let enriched = await enrichChunks(input.workspaceId, retrieved);
+  const supplemented = await supplementMissingTerms(
+    input.workspaceId,
+    input.userText,
+    retrieved,
+  );
+  let enriched = supplemented.chunks;
+  const lexicalPins = new Set(supplemented.pinnedIds);
   recordAuthority(trace, enriched);
   let transforms = [...plan.transforms];
   let webResults: TavilySearchResponse | null = null;
 
   if (plan.usedFallback) {
-    const prepared = await compressWithoutGate(enriched, preserveConflicts);
+    logRagEvent("classification", {
+      reason: plan.fallbackReason ?? "classification",
+      fallback: true,
+    });
+    const prepared = await compressWithoutGate(
+      enriched,
+      preserveConflicts,
+      lexicalPins,
+    );
     recordContext(trace, enriched, prepared.chunks, prepared.removed, []);
     const missed = await replyIfWorkspaceMisses(
       input,
@@ -291,7 +313,7 @@ export async function runRagPipeline(input: {
     return finish(trace, {
       chunks: prepared.chunks,
       contradictions: [],
-      gateScore: 1,
+      gateScore: 0,
       weakEvidence: false,
       webResults: null,
       queryClass: plan.queryClass,
@@ -314,19 +336,33 @@ export async function runRagPipeline(input: {
     preserveDistinctFacts: preserveConflicts,
   });
   if (quality.judgementFailed) {
-    return plainRetrieval(input, plan, transforms, trace);
+    return finishUnscored(
+      input,
+      plan,
+      transforms,
+      trace,
+      enriched,
+      lexicalPins,
+      preserveConflicts,
+    );
   }
 
-  const initialGateScore = quality.gateScore;
-  const initialCoverage = quality.dimensions.coverage;
-  const initialMiss = topicMissed(input.userText, quality);
+  const initialReasons = correctionReasons(quality.dimensions);
   recordQuality(trace, quality, "Initial retrieval");
+  logRagEvent("crag", {
+    reason: initialReasons.join(",") || "none",
+    decision: correctionDecision(false, quality.dimensions),
+    coverage: quality.dimensions.coverage,
+    relevance: quality.dimensions.relevance,
+    chunkCount: quality.uniqueChunks.length,
+  });
 
-  const needsAnotherPass =
-    quality.gateScore < RAG_QUALITY_GATE || initialMiss;
-
-  if (needsAnotherPass) {
-    const corrective = await planCorrectiveQueries(input.userText, () => {
+  if (correctionDecision(false, quality.dimensions) === "retrieve") {
+    const missing = missingRetrievalTerms(
+      input.userText,
+      quality.uniqueChunks.map((chunk) => chunk.text),
+    );
+    const planned = await planCorrectiveQueries(input.userText, () => {
       trace.step({
         id: "expansion",
         label: "Query expansion",
@@ -335,6 +371,15 @@ export async function runRagPipeline(input: {
         lines: [],
       });
     });
+    const corrective = correctiveRetrievalQueries({
+      userText: input.userText,
+      rewrittenQuery: planned.rewrittenQuery,
+      expansions: planned.retrievalQueries,
+      missingTerms: missing,
+    });
+    if (corrective.droppedRewrite) {
+      logRagEvent("corrective", { reason: "missing_terms", droppedRewrite: true });
+    }
     transforms = [...transforms, ...corrective.transforms];
     trace.step({
       id: "expansion",
@@ -359,8 +404,18 @@ export async function runRagPipeline(input: {
     );
     const merged = capChunks(
       mergeRetrievedChunks([quality.uniqueChunks, extra]),
+      lexicalPins,
     );
-    enriched = await enrichChunks(input.workspaceId, merged);
+    const corrected = await supplementMissingTerms(
+      input.workspaceId,
+      input.userText,
+      merged,
+      lexicalPins,
+    );
+    for (const id of corrected.pinnedIds) {
+      lexicalPins.add(id);
+    }
+    enriched = corrected.chunks;
     recordAuthority(trace, enriched);
     scoredInput = enriched;
     quality = await evaluateRetrievalQuality({
@@ -369,8 +424,29 @@ export async function runRagPipeline(input: {
       preserveDistinctFacts: preserveConflicts,
     });
     if (quality.judgementFailed) {
-      return plainRetrieval(input, plan, transforms, trace);
+      return finishUnscored(
+        input,
+        plan,
+        transforms,
+        trace,
+        enriched,
+        lexicalPins,
+        preserveConflicts,
+      );
     }
+
+    const afterDecision = correctionDecision(true, quality.dimensions);
+    const afterReasons = correctionReasons(quality.dimensions);
+    logRagEvent("crag", {
+      reason:
+        afterDecision === "exhausted"
+          ? "correction_exhausted"
+          : afterReasons.join(",") || "none",
+      decision: afterDecision,
+      coverage: quality.dimensions.coverage,
+      relevance: quality.dimensions.relevance,
+      chunkCount: quality.uniqueChunks.length,
+    });
 
     trace.step({
       id: "corrective-retrieval",
@@ -381,99 +457,62 @@ export async function runRagPipeline(input: {
     });
 
     const cragLines = [
-      initialGateScore < RAG_QUALITY_GATE
-        ? `Triggered because the gate was ${formatScore(initialGateScore)}, below ${RAG_QUALITY_GATE}.`
-        : `Triggered because the sources do not cover the question (coverage ${formatScore(initialCoverage)}).`,
-      `Rewrite: ${corrective.rewrittenQuery}`,
+      `Triggered because ${initialReasons.join(" and ").replaceAll("_", " ")}.`,
+      corrective.droppedRewrite
+        ? "The rewrite dropped question terms, so the original question was searched."
+        : `Rewrite: ${corrective.rewrittenQuery}`,
       ...corrective.retrievalQueries.map(previewQuery),
-      `Gate after workspace retry: ${formatScore(quality.gateScore)}.`,
-      `Coverage after workspace retry: ${formatScore(quality.dimensions.coverage)}.`,
+      `Coverage after the corrective pass: ${formatScore(quality.dimensions.coverage)}.`,
+      `Similarity after the corrective pass: ${formatScore(quality.dimensions.relevance)}.`,
+      afterDecision === "exhausted"
+        ? "Correction stopped after one pass."
+        : "The corrective pass recovered enough evidence.",
     ];
 
-    if (
-      topicMissed(input.userText, quality) &&
-      !(preserveConflicts && quality.uniqueChunks.length > 0)
-    ) {
-      recordQuality(
-        trace,
-        quality,
-        "After corrective retrieval",
-        "quality-final",
+    if (!(preserveConflicts && quality.uniqueChunks.length > 0)) {
+      const disposition = await workspaceDisposition(
+        input,
+        plan.queryClass,
+        quality.uniqueChunks,
+        quality.dimensions.coverage,
       );
-
-      if (isWebSearchEligible(input.userText, input.webSearchEnabled)) {
-        return answerFromWeb(
-          input.userText,
-          trace,
-          plan,
-          transforms,
-          input.webSearchEnabled,
-        );
-      }
-
-      const subjectTexts = quality.uniqueChunks.flatMap((chunk) => [
-        chunk.sourceTitle,
-        chunk.text,
-      ]);
-      if (!sharesWorkspaceSubject(input.userText, subjectTexts)) {
-        subjectTexts.push(
-          ...(await readySourceTitles(input.workspaceId)),
-        );
-      }
-
-      if (sharesWorkspaceSubject(input.userText, subjectTexts)) {
-        const reply = buildInsufficientEvidenceReply(input.userText);
+      if (disposition !== "answer") {
         trace.step({
           id: "crag",
           label: "CRAG",
           status: "done",
-          summary: "Sources do not specify this fact",
-          lines: [
-            ...cragLines,
-            "The workspace subject is present, and the asked fact is not.",
-          ],
+          summary:
+            disposition === "missing-fact"
+              ? "Sources do not specify this fact"
+              : "Sources don't cover this question",
+          lines: cragLines,
         });
-        trace.step({
-          id: "source-coverage",
-          label: "Source coverage",
-          status: "done",
-          summary: "Fact not in the sources",
-          lines: [reply],
-        });
-        return finish(trace, {
-          chunks: [],
-          contradictions: [],
-          gateScore: quality.dimensions.coverage,
-          weakEvidence: true,
-          webResults: null,
-          queryClass: plan.queryClass,
+        if (isWebSearchEligible(input.userText, input.webSearchEnabled)) {
+          return answerFromWeb(
+            input.userText,
+            trace,
+            plan,
+            transforms,
+            input.webSearchEnabled,
+          );
+        }
+        const missed = await replyIfWorkspaceMisses(
+          input,
+          plan,
           transforms,
-          directReply: reply,
-        });
+          trace,
+          quality.uniqueChunks,
+          quality.dimensions.coverage,
+          false,
+        );
+        if (missed) {
+          return missed;
+        }
       }
-
-      trace.step({
-        id: "crag",
-        label: "CRAG",
-        status: "done",
-        summary: "Sources don't cover this question",
-        lines: [
-          ...cragLines,
-          "Web search waits until the user accepts it.",
-        ],
-      });
-      return finishUncovered(
-        input,
-        plan,
-        transforms,
-        trace,
-        quality.uniqueChunks,
-        quality.dimensions.coverage,
-      );
     }
 
     if (
-      quality.gateScore < RAG_QUALITY_GATE &&
+      needsCorrectiveRetrieval(quality.dimensions) &&
       input.webSearchEnabled &&
       !preserveConflicts
     ) {
@@ -496,25 +535,33 @@ export async function runRagPipeline(input: {
           preserveDistinctFacts: preserveConflicts,
         });
         if (quality.judgementFailed) {
-          return plainRetrieval(input, plan, plan.transforms, trace);
+          return finishUnscored(
+            input,
+            plan,
+            transforms,
+            trace,
+            enriched,
+            lexicalPins,
+            preserveConflicts,
+          );
         }
-        cragLines.push(
-          `Web results: ${webResults.results.length}.`,
-          `Gate after web search: ${formatScore(quality.gateScore)}.`,
-        );
+        cragLines.push(`Web results: ${webResults.results.length}.`);
       } catch {
         cragLines.push("Web search failed. Continuing with workspace chunks.");
       }
-    } else if (quality.gateScore < RAG_QUALITY_GATE && preserveConflicts) {
+    } else if (
+      needsCorrectiveRetrieval(quality.dimensions) &&
+      preserveConflicts
+    ) {
       cragLines.push(
         "Both conflicting values were kept.",
         "Web search was not used.",
       );
-    } else if (quality.gateScore < RAG_QUALITY_GATE) {
-      cragLines.push(
-        "Web search was not used because the toggle is off.",
-        `Final gate: ${formatScore(quality.gateScore)}.`,
-      );
+    } else if (
+      needsCorrectiveRetrieval(quality.dimensions) &&
+      !input.webSearchEnabled
+    ) {
+      cragLines.push("Web search was not used because the toggle is off.");
     }
 
     trace.step({
@@ -522,9 +569,9 @@ export async function runRagPipeline(input: {
       label: "CRAG",
       status: "done",
       summary:
-        quality.gateScore < RAG_QUALITY_GATE
-          ? `Still low at ${formatScore(quality.gateScore)}`
-          : `Recovered at ${formatScore(quality.gateScore)}`,
+        afterDecision === "exhausted"
+          ? "Correction stopped after one pass"
+          : "Recovered",
       lines: cragLines,
     });
     recordQuality(trace, quality, "After corrective retrieval", "quality-final");
@@ -533,15 +580,15 @@ export async function runRagPipeline(input: {
       id: "crag",
       label: "CRAG",
       status: "done",
-      summary: `Not triggered — gate ${formatScore(initialGateScore)} is at least ${RAG_QUALITY_GATE}`,
+      summary: "Not triggered",
       lines: [
-        `Threshold: ${RAG_QUALITY_GATE}.`,
+        `Coverage floor: ${RAG_TOPIC_COVERAGE_FLOOR}. Similarity floor: ${RAG_MIN_SCORE}.`,
         "Normal generation uses the first retrieval.",
       ],
     });
   }
 
-  const prepared = compressForPrompt(quality, preserveConflicts);
+  const prepared = compressForPrompt(quality, preserveConflicts, lexicalPins);
   const removed = scoredInput.filter(
     (chunk) =>
       !quality.uniqueChunks.some((kept) => kept.chunkId === chunk.chunkId),
@@ -559,8 +606,8 @@ export async function runRagPipeline(input: {
   return finish(trace, {
     chunks: prepared.chunks,
     contradictions: quality.contradictions,
-    gateScore: quality.gateScore,
-    weakEvidence: quality.gateScore < RAG_QUALITY_GATE,
+    gateScore: quality.judgementFailed ? 0 : quality.gateScore,
+    weakEvidence: needsCorrectiveRetrieval(quality.dimensions),
     webResults,
     queryClass: plan.queryClass,
     transforms,
@@ -630,7 +677,7 @@ async function finishOverview(
   });
 }
 
-async function plainRetrieval(
+async function finishUnscored(
   input: {
     workspaceId: string;
     userText: string;
@@ -639,38 +686,33 @@ async function plainRetrieval(
   plan: QueryPlan,
   transforms: QueryTransform[],
   trace: RagTraceRecorder,
+  chunks: EnrichedChunk[],
+  pinnedIds: ReadonlySet<string>,
+  preserveConflicts: boolean,
 ): Promise<RagPipelineResult> {
-  trace.step({
-    id: "fallback",
-    label: "Fallback retrieval",
-    status: "active",
-    summary: "Using the original message",
-    lines: ["The quality judgement failed, so corrective scoring was skipped."],
+  logRagEvent("quality", {
+    reason: "judgement_failed",
+    chunkCount: chunks.length,
   });
-
-  const retrieved = capChunks(
-    await retrieveWorkspaceContext(input.workspaceId, input.userText),
-  );
-  const enriched = await enrichChunks(input.workspaceId, retrieved);
-  const prepared = await compressWithoutGate(
-    enriched,
-    asksConflictingValues(input.userText),
-  );
-
   trace.step({
     id: "fallback",
     label: "Fallback retrieval",
     status: "done",
-    summary: `${prepared.chunks.length} chunks from the original message`,
-    lines: retrieved.map(
-      (chunk) =>
-        `${chunk.sourceTitle} (${chunk.sourceType}, score ${chunk.score.toFixed(2)})`,
-    ),
+    summary: "Quality judgement failed",
+    lines: [
+      "The coverage judgement failed, so the score is not treated as a pass.",
+      `${chunks.length} passages already retrieved are kept.`,
+    ],
   });
-  recordAuthority(trace, enriched);
+
+  const prepared = await compressWithoutGate(
+    chunks,
+    preserveConflicts,
+    pinnedIds,
+  );
   recordContext(
     trace,
-    enriched,
+    chunks,
     prepared.chunks,
     prepared.removed,
     [],
@@ -685,7 +727,7 @@ async function plainRetrieval(
     trace,
     prepared.chunks,
     null,
-    asksConflictingValues(input.userText),
+    preserveConflicts,
   );
   if (missed) {
     return missed;
@@ -694,11 +736,90 @@ async function plainRetrieval(
   return finish(trace, {
     chunks: prepared.chunks,
     contradictions: [],
-    gateScore: 1,
-    weakEvidence: false,
+    gateScore: 0,
+    weakEvidence: true,
     webResults: null,
     queryClass: plan.queryClass,
     transforms,
+  });
+}
+
+async function supplementMissingTerms(
+  workspaceId: string,
+  question: string,
+  chunks: RetrievedChunk[],
+  alreadyPinned: ReadonlySet<string> = new Set(),
+) {
+  const missing = missingRetrievalTerms(
+    question,
+    chunks.map((chunk) => chunk.text),
+  );
+  if (missing.length === 0) {
+    return {
+      chunks: await enrichChunks(workspaceId, capChunks(chunks, alreadyPinned)),
+      pinnedIds: [...alreadyPinned],
+    };
+  }
+
+  let lexical: RetrievedChunk[] = [];
+  try {
+    const rows = await findChunksByContentTerms(
+      workspaceId,
+      missing,
+      RAG_LEXICAL_LIMIT,
+    );
+    lexical = chunksFromLexicalRows(rows);
+    logRagEvent("retrieval", {
+      reason: lexical.length > 0 ? "lexical_hit" : "missing_terms",
+      count: lexical.length,
+      missingTermCount: missing.length,
+    });
+  } catch {
+    logRagEvent("retrieval", {
+      reason: "missing_terms",
+      count: 0,
+      failed: true,
+    });
+  }
+
+  const pinnedIds = new Set<string>(alreadyPinned);
+  for (const chunk of lexical) {
+    pinnedIds.add(chunk.chunkId);
+  }
+  const merged = capChunks(mergeRetrievedChunks([chunks, lexical]), pinnedIds);
+
+  return {
+    chunks: await enrichChunks(workspaceId, merged),
+    pinnedIds: [...pinnedIds],
+  };
+}
+
+async function workspaceDisposition(
+  input: {
+    workspaceId: string;
+    userText: string;
+  },
+  queryClass: QueryClass,
+  chunks: EnrichedChunk[],
+  coverage: number | null,
+) {
+  let sharesSubject = sharesWorkspaceSubject(
+    input.userText,
+    chunks.flatMap((chunk) => [chunk.sourceTitle, chunk.text]),
+  );
+  if (!sharesSubject) {
+    sharesSubject = sharesWorkspaceSubject(
+      input.userText,
+      await readySourceTitles(input.workspaceId),
+    );
+  }
+
+  return retrievalDisposition({
+    queryClass,
+    question: input.userText,
+    chunkTexts: chunks.map((chunk) => chunk.text),
+    coverage,
+    sharesSubject,
   });
 }
 
@@ -725,6 +846,7 @@ async function enrichChunks(
 async function compressWithoutGate(
   chunks: EnrichedChunk[],
   preserveDistinctFacts = false,
+  pinnedIds: ReadonlySet<string> = new Set(),
 ) {
   const embeddings = await embedChunksForDedup(chunks);
   const dedupFailed = chunks.length > 0 && embeddings.length !== chunks.length;
@@ -735,7 +857,7 @@ async function compressWithoutGate(
       });
   const compressed = compressChunks(
     deduped.unique,
-    new Set<string>(),
+    pinnedIds,
     RAG_CONTEXT_CHAR_BUDGET,
   );
   const removed = chunks.filter(
@@ -752,10 +874,12 @@ async function compressWithoutGate(
 function compressForPrompt(
   quality: RetrievalQuality,
   preserveConflicts = false,
+  pinnedIds: ReadonlySet<string> = new Set(),
 ) {
-  const pinned = new Set(
-    quality.contradictions.flatMap((conflict) => conflict.chunkIds),
-  );
+  const pinned = new Set<string>(pinnedIds);
+  for (const id of quality.contradictions.flatMap((conflict) => conflict.chunkIds)) {
+    pinned.add(id);
+  }
   if (preserveConflicts) {
     for (const chunk of quality.uniqueChunks) {
       pinned.add(chunk.chunkId);
@@ -814,19 +938,6 @@ function finish(
     ...result,
     trace: trace.snapshot(),
   };
-}
-
-function topicMissed(
-  question: string,
-  quality: Pick<RetrievalQuality, "dimensions" | "uniqueChunks">,
-) {
-  return (
-    sourcesMissTopic(quality.dimensions.coverage) ||
-    questionTermsMissing(
-      question,
-      quality.uniqueChunks.map((chunk) => chunk.text),
-    )
-  );
 }
 
 async function loadNotebookSamples(
@@ -895,24 +1006,12 @@ async function replyIfWorkspaceMisses(
     return null;
   }
 
-  let sharesSubject = sharesWorkspaceSubject(
-    input.userText,
-    chunks.flatMap((chunk) => [chunk.sourceTitle, chunk.text]),
-  );
-  if (!sharesSubject) {
-    sharesSubject = sharesWorkspaceSubject(
-      input.userText,
-      await readySourceTitles(input.workspaceId),
-    );
-  }
-
-  const decision = retrievalDisposition({
-    queryClass: plan.queryClass,
-    question: input.userText,
-    chunkTexts: chunks.map((chunk) => chunk.text),
+  const decision = await workspaceDisposition(
+    input,
+    plan.queryClass,
+    chunks,
     coverage,
-    sharesSubject,
-  });
+  );
 
   if (decision === "answer") {
     return null;
@@ -1188,7 +1287,8 @@ function recordQuality(
       `Authority ${formatScore(dimensions.authority)}`,
       `Duplication ${formatScore(dimensions.duplication)}`,
       `Contradictions ${quality.contradictions.length}`,
-      `Gate ${formatScore(quality.gateScore)} (threshold ${RAG_QUALITY_GATE})`,
+      `Informational average ${formatScore(quality.gateScore)}.`,
+      `Correction uses coverage below ${RAG_TOPIC_COVERAGE_FLOOR} or similarity below ${RAG_MIN_SCORE}.`,
     ],
   });
 }

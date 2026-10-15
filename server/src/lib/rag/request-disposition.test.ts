@@ -1,5 +1,5 @@
+/// <reference types="vitest/globals" />
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
 import type { EnrichedChunk } from "./authority.js";
 import { deduplicateChunks } from "./context-intelligence.js";
 import {

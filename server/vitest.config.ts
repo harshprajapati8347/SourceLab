@@ -2,6 +2,7 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    include: ["src/lib/guardrails/**/*.spec.ts"],
+    include: ["src/**/*.test.ts", "src/**/*.spec.ts"],
+    globals: true,
   },
 });

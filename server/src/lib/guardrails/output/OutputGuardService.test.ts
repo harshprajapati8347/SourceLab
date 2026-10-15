@@ -1,5 +1,5 @@
+/// <reference types="vitest/globals" />
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
 import { guardrailsConfig } from "../../config/guardrails.js";
 import { OutputGuardError } from "../../shared/errors.js";
 import { OutputGuardService } from "./OutputGuardService.js";

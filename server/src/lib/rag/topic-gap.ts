@@ -122,6 +122,55 @@ export function questionTermsMissing(question: string, texts: string[]) {
 }
 
 /**
+ * Share of question terms that appear in the passages.
+ *
+ * A question with no content word is treated as supported when any passage
+ * was retrieved, and unsupported when nothing was retrieved.
+ *
+ * @param question - Latest user message
+ * @param texts - Passage text already retrieved
+ * @returns A ratio from 0 to 1
+ */
+export function supportingTermRatio(question: string, texts: string[]) {
+  const terms = questionContentTerms(question);
+  if (terms.length === 0) {
+    return texts.length > 0 ? 1 : 0;
+  }
+
+  const haystack = texts.join("\n").toLowerCase();
+  const found = terms.filter((term) => haystack.includes(term)).length;
+  return found / terms.length;
+}
+
+/**
+ * Question words and numbers that are not in the retrieved passages.
+ *
+ * Used to decide whether a workspace chunk lookup is worth running.
+ *
+ * @param question - Latest user message
+ * @param texts - Passage text already retrieved
+ * @returns Missing terms, content words first and then numbers
+ */
+export function missingRetrievalTerms(question: string, texts: string[]) {
+  const haystack = texts.join("\n").toLowerCase();
+  const digits = texts.join("\n").replace(/\D/g, "");
+  const words = questionContentTerms(question).filter(
+    (term) => !haystack.includes(term),
+  );
+  const numbers = [
+    ...new Set(
+      [...question.matchAll(/\d{2,}/g)]
+        .map((match) => match[0])
+        .filter(
+          (number) => !haystack.includes(number) && !digits.includes(number),
+        ),
+    ),
+  ];
+
+  return [...words, ...numbers];
+}
+
+/**
  * Turns a user question into a short topic label.
  *
  * @param question - Latest user message
