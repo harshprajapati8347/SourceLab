@@ -167,6 +167,7 @@ export function buildChatSystemPrompt(input: {
   overview?: boolean;
   researchTopic?: string | null;
   stateBothSides?: boolean;
+  conversational?: boolean;
 }) {
   const sections: string[] = [
     "You are SourceLab, an assistant that helps users learn from their workspace sources.",
@@ -253,11 +254,13 @@ export function buildChatSystemPrompt(input: {
     const prefetchedWeb = (input.webResults?.results.length ?? 0) > 0;
     sections.push(
       "This workspace has no indexed source content yet, or nothing relevant was retrieved.",
-      prefetchedWeb
-        ? "Use the web results below when they apply. Write each factual claim as its own sentence, with its citation marker in that sentence. If a requested detail is not stated, say that it is not in the sources. Do not infer or fill in missing details."
-        : input.webSearchEnabled
-          ? "Call web_search before answering from general knowledge. Cite each web fact with its [W#] marker."
-          : "Answer helpfully from general knowledge and suggest adding or processing sources when appropriate.",
+      input.conversational
+        ? "Reply briefly to the conversational message. Do not invent citations or factual claims about the workspace."
+        : prefetchedWeb
+          ? "Use the web results below when they apply. Write each factual claim as its own sentence, with its citation marker in that sentence. If a requested detail is not stated, say that it is not in the sources. Do not infer or fill in missing details."
+          : input.webSearchEnabled
+            ? "Call web_search before answering. Cite each web fact with its [W#] marker in the same sentence. If web search returns nothing, say so. Do not fill in the missing detail from general knowledge."
+            : "The workspace sources do not contain enough information to answer this. Say that clearly. Do not answer from general knowledge and do not invent citations.",
       "Do not invent citations.",
     );
     appendWebResults(sections, input.webResults);

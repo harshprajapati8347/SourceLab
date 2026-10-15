@@ -37,11 +37,16 @@ import {
 } from "../lib/ai-config.js";
 import { enqueueConversationSummarize } from "../lib/conversation-events.js";
 import { groundAnswer } from "../lib/rag/answer-grounding.js";
+import {
+  assembleCitations,
+  pruneUnsupportedWebMarkers,
+  retainCitedWebSentences,
+  type SavedCitation,
+} from "../lib/rag/citations.js";
 import { logRagEvent } from "../lib/rag/rag-log.js";
 import {
   appendEmbeddedInstructionNote,
   asksConflictingValues,
-  ensureWebSourceMarkers,
 } from "../lib/rag/request-disposition.js";
 import { buildChatSystemPrompt } from "../lib/rag/retrieve.js";
 import {
@@ -49,6 +54,17 @@ import {
   suggestFollowUpQuestions,
   type NotebookPassage,
 } from "../lib/rag/suggested-questions.js";
+import {
+  focusFromTitles,
+  topicFromQuestion,
+  WEB_RESEARCH_ACCEPTANCE,
+} from "../lib/rag/topic-gap.js";
+import {
+  replaceUnauthorizedAnswer,
+  searchWebIfAllowed,
+  WebSearchNotAuthorizedError,
+  webSearchFailedReply,
+} from "../lib/rag/web-search-policy.js";
 import type { RagTrace, RagTraceStep } from "../lib/rag/rag-trace.js";
 import { isRagTraceEnabled, logTraceStep } from "../lib/rag/rag-trace.js";
 import { runRagPipeline } from "./rag-pipeline.service.js";
@@ -70,7 +86,6 @@ import { searchMemoriesForChat } from "./memory.service.js";
 import {
   formatTavilyResultsForPrompt,
   mergeWebSearchResults,
-  searchWeb,
   type TavilySearchResponse,
 } from "../lib/tavily.js";
 import { CREDIT_COSTS } from "../config/plans.js";
@@ -328,6 +343,7 @@ export async function streamWorkspaceChat(
       : modelMessages;
 
   let webSearchResults: TavilySearchResponse | null = null;
+  let webSearchFailed = false;
   let suggestions: string[] = [];
   let citations: Array<{
     sourceId?: string;
@@ -399,6 +415,7 @@ export async function streamWorkspaceChat(
           pipeline.chunks.length > 0,
         researchTopic: pipeline.researchTopic,
         stateBothSides: asksConflictingValues(textForModel),
+        conversational: pipeline.queryClass === "conversational",
       });
 
       const pushStep = (step: RagTraceStep) => {
@@ -459,7 +476,29 @@ export async function streamWorkspaceChat(
                     .describe("The search query for current web information"),
                 }),
                 execute: async ({ query }) => {
-                  const results = await searchWeb(query);
+                  let results;
+                  try {
+                    results = await searchWebIfAllowed({
+                      allowed: webSearchEnabled,
+                      query,
+                    });
+                  } catch (error) {
+                    webSearchFailed = true;
+                    if (error instanceof WebSearchNotAuthorizedError) {
+                      return "Web search is not authorized for this request. Do not answer from general knowledge.";
+                    }
+
+                    return "Web search failed. Do not invent sources or answer from general knowledge.";
+                  }
+
+                  if (
+                    results.results.length === 0 &&
+                    (webSearchResults?.results.length ?? 0) === 0
+                  ) {
+                    webSearchFailed = true;
+                    return "Web search returned no usable results. Do not answer from general knowledge or invent sources.";
+                  }
+
                   const before = webSearchResults?.results.length ?? 0;
                   webSearchResults = mergeWebSearchResults(
                     webSearchResults,
@@ -601,10 +640,39 @@ export async function streamWorkspaceChat(
           finalText !== OUTPUT_CHECK_FAILED_MESSAGE &&
           finalText !== OUTPUT_POLICY_MESSAGE
         ) {
-          finalText = ensureWebSourceMarkers(
+          const searchAllowed =
+            webSearchEnabled || Boolean(pipeline.researchTopic);
+          finalText = pruneUnsupportedWebMarkers(
             finalText,
-            webSearchResults?.results.length ?? 0,
+            webSearchResults?.results ?? [],
           );
+          if ((webSearchResults?.results.length ?? 0) > 0) {
+            finalText = retainCitedWebSentences(finalText);
+          }
+          if (
+            webSearchFailed &&
+            (webSearchResults?.results.length ?? 0) === 0 &&
+            evidenceChunks.length === 0 &&
+            pipeline.queryClass !== "conversational"
+          ) {
+            finalText = webSearchFailedReply(topicFromQuestion(textForModel));
+          } else {
+            const beforeConsent = finalText;
+            finalText = replaceUnauthorizedAnswer({
+              answer: finalText,
+              searchAllowed,
+              chunkCount: evidenceChunks.length,
+              withheld: grounded.withheld,
+              conversational: pipeline.queryClass === "conversational",
+              topic: topicFromQuestion(textForModel),
+              focus: focusFromTitles(
+                pipeline.sourceSamples.map((sample) => sample.title),
+              ),
+            });
+            if (finalText !== beforeConsent) {
+              suggestions = [WEB_RESEARCH_ACCEPTANCE];
+            }
+          }
           if (ignoredEmbeddedInstructions) {
             finalText = appendEmbeddedInstructionNote(finalText);
           }
@@ -655,6 +723,7 @@ export async function streamWorkspaceChat(
       }
 
       if (
+        suggestions.length === 0 &&
         finalText !== OUTPUT_CHECK_FAILED_MESSAGE &&
         finalText !== OUTPUT_POLICY_MESSAGE
       ) {
@@ -806,53 +875,6 @@ function formatRecentTurns(messages: UIMessage[]) {
     })
     .filter((turn) => turn !== null)
     .join("\n");
-}
-
-type SavedCitation = {
-  sourceId?: string;
-  sourceTitle: string;
-  sourceType: string;
-  chunkId?: string;
-  chunkIndex?: number;
-  page?: number;
-  excerpt: string;
-  score?: number;
-  url?: string;
-  cited?: boolean;
-};
-
-/**
- * Keeps retrieved citations in prompt order and marks the ones still in the answer.
- *
- * Workspace markers use `[1]`. Web markers use `[W1]` and follow the web result order.
- *
- * @param input - Chunk citations, web results, and the text that will be saved
- * @returns Citations in the order inline markers expect
- */
-function assembleCitations(input: {
-  chunks: SavedCitation[];
-  webResults: TavilySearchResponse | null;
-  answer: string;
-}): SavedCitation[] {
-  const markers = new Set(
-    [...input.answer.matchAll(/\[(W?\d+)\]/g)]
-      .map((match) => match[1])
-      .filter((marker): marker is string => typeof marker === "string"),
-  );
-
-  const chunks = input.chunks.map((citation, index) => ({
-    ...citation,
-    cited: markers.has(String(index + 1)),
-  }));
-  const web = (input.webResults?.results ?? []).map((result, index) => ({
-    sourceType: "WEB",
-    sourceTitle: result.title,
-    url: result.url,
-    excerpt: result.content,
-    cited: markers.has(`W${index + 1}`),
-  }));
-
-  return [...chunks, ...web];
 }
 
 /**

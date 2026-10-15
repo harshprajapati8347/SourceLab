@@ -168,7 +168,7 @@ streamWorkspaceChat():
 runRagPipeline():
   - gpt-4o-mini classifies the latest message (summary + recent turns) and routes transforms
   - conversational: skip workspace retrieval. Out-of-domain questions are still searched
-  - a short "yes" after a web-research offer searches the web for that topic when the toggle is on
+  - a short "yes" after the latest web-research offer searches the web for that topic, even if the toggle is off. Sending that topic again searches only when the toggle is on. An older yes does not apply to a new question
   - otherwise embed one or more queries (HyDE passage + query for simple factual and ambiguous;
     sub-questions for multi-hop, analytical, and comparative) → Pinecone, merge by chunk id
   - a question that names two numbers, such as "50 or 100", also searches each number and keeps both passages when they differ
@@ -177,8 +177,10 @@ runRagPipeline():
     pass at a relaxed score floor. If the workspace subject is present and the asked fact is not,
     the reply says the sources do not specify that fact. If the question is a current or official
     external fact and web search is on, Tavily runs immediately. Otherwise the reply names the
-    gap, the notebook's focus, and offers web research when the toggle is on. Tavily also runs
-    immediately for a weak but on-topic retrieval when web search is already enabled
+    gap, the notebook's focus, and asks before any search. Tavily also runs
+    immediately for a weak but on-topic retrieval when web search is already enabled.
+    Classifier and quality-judgement fallbacks use that same gap check, so an empty retrieval
+    is not answered from general knowledge
   - semantic dedup, extractive compression, contradiction notes. Chunk text stays verbatim.
     Source text is untrusted data. A request to obey instructions inside a document is removed,
     the safe task still runs, and the reply says those instructions were not followed
@@ -188,7 +190,7 @@ streamWorkspaceChat() continues:
   - buildChatSystemPrompt() from compressed chunks, authority metadata, conflicts,
     user memory, notebook memory, summary, weak-evidence note, and any corrective web results
   - the same steps are logged as `[rag]` console lines. They are streamed as a `data-rag` part only when `RAG_TRACE_ENABLED=true`
-  - streamText() (AI SDK) with optional web_search tool (Tavily) runs on the server. Later web searches append to the same `[W#]` list. A web answer that omits those markers gets them appended so the source links stay visible. Web pages are labeled as outside the workspace
+  - streamText() (AI SDK) with optional web_search tool (Tavily) runs on the server only when this request may search. Later web searches append to the same `[W#]` list. A marker stays only when that page supports the sentence. Web pages are labeled as outside the workspace
   - output guardrails then mask PII, keep cited paraphrases, redact real credentials in place, and run moderation
   - only the safe text is written to the UI stream, with citations. Up to three short follow-up questions are streamed as `data-suggestions` and stored on the message trace. Coverage is added to the trace when that trace is enabled
   - onFinish: save that safe assistant Message + citations (workspace chunks and web

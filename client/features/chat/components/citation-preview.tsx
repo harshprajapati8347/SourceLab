@@ -16,6 +16,7 @@ import { useImportWebSearchSource } from "@/features/sources/hooks/use-sources";
 import { SOURCE_TYPE_LABELS } from "@/features/sources/lib/constants";
 import type { SourceType } from "@/features/sources/lib/types";
 import { sourceRoutes } from "@/features/sources/lib/routes";
+import { isSafeHttpUrl } from "../lib/citations";
 import type { ChatCitation } from "../lib/types";
 
 type CitationPreviewProps = {
@@ -47,7 +48,7 @@ export function CitationPreview({
     citation.sourceType in SOURCE_TYPE_LABELS
       ? SOURCE_TYPE_LABELS[citation.sourceType as SourceType]
       : citation.sourceType;
-  const isWeb = citation.sourceType === "WEB" && citation.url;
+  const isWeb = citation.sourceType === "WEB" && isSafeHttpUrl(citation.url);
 
   async function saveToLibrary() {
     if (!citation.url) {

@@ -44,7 +44,6 @@ import {
 import {
   describeNotebookGap,
   type NotebookPassage,
-  suggestFollowUpQuestions,
 } from "../lib/rag/suggested-questions.js";
 import {
   asksConflictingValues,
@@ -54,14 +53,19 @@ import {
   sharesWorkspaceSubject,
 } from "../lib/rag/request-disposition.js";
 import {
-  acceptsWebResearch,
   buildUncoveredTopicReply,
   focusFromTitles,
-  pendingWebResearchTopic,
   questionTermsMissing,
   sourcesMissTopic,
   topicFromQuestion,
+  WEB_RESEARCH_ACCEPTANCE,
 } from "../lib/rag/topic-gap.js";
+import {
+  acceptedResearchTopic,
+  retrievalDisposition,
+  searchWebIfAllowed,
+  settleWebSearch,
+} from "../lib/rag/web-search-policy.js";
 import {
   evaluateRetrievalQuality,
   type Contradiction,
@@ -72,10 +76,7 @@ import {
   findReadySourcesWithChunks,
   findSourcesByIds,
 } from "../repositories/source.repository.js";
-import {
-  searchWeb,
-  type TavilySearchResponse,
-} from "../lib/tavily.js";
+import { type TavilySearchResponse } from "../lib/tavily.js";
 
 export type RagPipelineResult = {
   chunks: EnrichedChunk[];
@@ -102,12 +103,14 @@ export type RagPipelineResult = {
 /**
  * Runs query and context intelligence for one workspace chat turn.
  *
- * Classification, HyDE, and coverage failures fall open to ordinary retrieval.
- * A low gate score runs one rewrite-and-expand pass, then Tavily only when
- * web search is already enabled. A current external question searches the web
- * when the topic is still missing. A workspace subject with a missing fact
- * gets an insufficient-evidence reply. An explicit numeric conflict keeps both
- * passages.
+ * Classification, HyDE, and coverage failures fall open to ordinary retrieval,
+ * then a gap reply when those passages still miss the question. A low gate
+ * score runs one rewrite-and-expand pass, then Tavily only when web search is
+ * already enabled. A current external question searches the web when the topic
+ * is still missing and the toggle is on. A workspace subject with a missing
+ * fact gets an insufficient-evidence reply. An uncovered topic asks before any
+ * search. A short yes, or the same topic sent again with the toggle on, searches
+ * that topic only. An explicit numeric conflict keeps both passages.
  *
  * @param input - Workspace, user text, conversation context, and web-search flag
  * @returns Chunks, conflicts, and web results ready for the system prompt
@@ -130,9 +133,13 @@ export async function runRagPipeline(input: {
     lines: [input.userText],
   });
 
-  const acceptedTopic = pendingWebResearchTopic(input.recentTurns ?? "");
-  if (acceptedTopic && acceptsWebResearch(input.userText)) {
-    return answerAcceptedResearch(input, acceptedTopic, trace);
+  const acceptedTopic = acceptedResearchTopic({
+    userText: input.userText,
+    recentTurns: input.recentTurns ?? "",
+    webSearchEnabled: input.webSearchEnabled,
+  });
+  if (acceptedTopic) {
+    return answerAcceptedResearch(acceptedTopic, trace);
   }
 
   let plan = await planQuery({
@@ -268,6 +275,19 @@ export async function runRagPipeline(input: {
   if (plan.usedFallback) {
     const prepared = await compressWithoutGate(enriched, preserveConflicts);
     recordContext(trace, enriched, prepared.chunks, prepared.removed, []);
+    const missed = await replyIfWorkspaceMisses(
+      input,
+      plan,
+      transforms,
+      trace,
+      prepared.chunks,
+      null,
+      preserveConflicts,
+    );
+    if (missed) {
+      return missed;
+    }
+
     return finish(trace, {
       chunks: prepared.chunks,
       contradictions: [],
@@ -382,7 +402,13 @@ export async function runRagPipeline(input: {
       );
 
       if (isWebSearchEligible(input.userText, input.webSearchEnabled)) {
-        return answerFromWeb(input.userText, trace, plan, transforms);
+        return answerFromWeb(
+          input.userText,
+          trace,
+          plan,
+          transforms,
+          input.webSearchEnabled,
+        );
       }
 
       const subjectTexts = quality.uniqueChunks.flatMap((chunk) => [
@@ -459,7 +485,10 @@ export async function runRagPipeline(input: {
           summary: "Searching the web",
           lines: cragLines,
         });
-        webResults = await searchWeb(corrective.rewrittenQuery);
+        webResults = await searchWebIfAllowed({
+          allowed: input.webSearchEnabled,
+          query: corrective.rewrittenQuery,
+        });
         quality = await evaluateRetrievalQuality({
           query: input.userText,
           chunks: quality.uniqueChunks,
@@ -605,6 +634,7 @@ async function plainRetrieval(
   input: {
     workspaceId: string;
     userText: string;
+    webSearchEnabled: boolean;
   },
   plan: QueryPlan,
   transforms: QueryTransform[],
@@ -647,6 +677,19 @@ async function plainRetrieval(
     null,
     prepared.dedupFailed,
   );
+
+  const missed = await replyIfWorkspaceMisses(
+    input,
+    plan,
+    transforms,
+    trace,
+    prepared.chunks,
+    null,
+    asksConflictingValues(input.userText),
+  );
+  if (missed) {
+    return missed;
+  }
 
   return finish(trace, {
     chunks: prepared.chunks,
@@ -821,12 +864,99 @@ async function readySourceTitles(workspaceId: string) {
 }
 
 /**
+ * Returns a direct reply when fallback retrieval still misses the question.
+ *
+ * Classifier and quality-judgement failures skip the coverage gate. This applies
+ * the same insufficiency decision before the chat model can answer from memory.
+ *
+ * @param input - Workspace, question, and whether the toggle is on
+ * @param plan - Retrieval plan for this turn
+ * @param transforms - Transforms already applied
+ * @param trace - Trace recorder for this turn
+ * @param chunks - Passages that would otherwise go to the model
+ * @param coverage - Judged coverage, or null when scoring did not run
+ * @param preserveConflicts - True when both sides of a numeric conflict must stay
+ * @returns A gap or missing-fact reply, or null when the passages can be used
+ */
+async function replyIfWorkspaceMisses(
+  input: {
+    workspaceId: string;
+    userText: string;
+    webSearchEnabled: boolean;
+  },
+  plan: QueryPlan,
+  transforms: QueryTransform[],
+  trace: RagTraceRecorder,
+  chunks: EnrichedChunk[],
+  coverage: number | null,
+  preserveConflicts: boolean,
+): Promise<RagPipelineResult | null> {
+  if (preserveConflicts && chunks.length > 0) {
+    return null;
+  }
+
+  let sharesSubject = sharesWorkspaceSubject(
+    input.userText,
+    chunks.flatMap((chunk) => [chunk.sourceTitle, chunk.text]),
+  );
+  if (!sharesSubject) {
+    sharesSubject = sharesWorkspaceSubject(
+      input.userText,
+      await readySourceTitles(input.workspaceId),
+    );
+  }
+
+  const decision = retrievalDisposition({
+    queryClass: plan.queryClass,
+    question: input.userText,
+    chunkTexts: chunks.map((chunk) => chunk.text),
+    coverage,
+    sharesSubject,
+  });
+
+  if (decision === "answer") {
+    return null;
+  }
+
+  if (decision === "missing-fact") {
+    const reply = buildInsufficientEvidenceReply(input.userText);
+    trace.step({
+      id: "source-coverage",
+      label: "Source coverage",
+      status: "done",
+      summary: "Fact not in the sources",
+      lines: [reply],
+    });
+    return finish(trace, {
+      chunks: [],
+      contradictions: [],
+      gateScore: coverage ?? 0,
+      weakEvidence: true,
+      webResults: null,
+      queryClass: plan.queryClass,
+      transforms,
+      directReply: reply,
+    });
+  }
+
+  return finishUncovered(
+    input,
+    plan,
+    transforms,
+    trace,
+    chunks,
+    coverage ?? 0,
+  );
+}
+
+/**
  * Answers a current external question from Tavily when the workspace missed it.
  *
  * @param query - User question to search
  * @param trace - Trace recorder for this turn
  * @param plan - Retrieval plan, kept on the result for the trace
  * @param transforms - Transforms already applied
+ * @param allowed - True only when this request may call Tavily
  * @returns Web results for the chat model, or a direct reply when search fails
  */
 async function answerFromWeb(
@@ -834,6 +964,7 @@ async function answerFromWeb(
   trace: RagTraceRecorder,
   plan: QueryPlan,
   transforms: QueryTransform[],
+  allowed: boolean,
 ): Promise<RagPipelineResult> {
   trace.step({
     id: "crag",
@@ -844,58 +975,55 @@ async function answerFromWeb(
   });
 
   try {
-    const webResults = await searchWeb(query);
-    trace.step({
-      id: "crag",
-      label: "CRAG",
-      status: "done",
-      summary: `${webResults.results.length} web ${webResults.results.length === 1 ? "result" : "results"}`,
-      lines: webResults.results.map((item) => item.title),
-    });
-
-    if (webResults.results.length === 0) {
-      return finish(trace, {
-        chunks: [],
-        contradictions: [],
-        gateScore: 0,
-        weakEvidence: true,
-        webResults: null,
-        queryClass: plan.queryClass,
-        transforms,
-        directReply: `I couldn't find web results on ${query}. Try again in a moment.`,
-      });
-    }
-
-    return finish(trace, {
-      chunks: [],
-      contradictions: [],
-      gateScore: 1,
-      weakEvidence: false,
-      webResults,
-      queryClass: plan.queryClass,
+    const webResults = await searchWebIfAllowed({ allowed, query });
+    return finishWebSearch(
+      trace,
+      plan.queryClass,
       transforms,
-      researchTopic: query,
-    });
+      query,
+      webResults,
+      false,
+    );
   } catch {
     logRagEvent("web-research", { failed: true });
-    trace.step({
-      id: "crag",
-      label: "CRAG",
-      status: "done",
-      summary: "Web search failed",
-      lines: ["The search did not return results."],
-    });
-    return finish(trace, {
-      chunks: [],
-      contradictions: [],
-      gateScore: 0,
-      weakEvidence: true,
-      webResults: null,
-      queryClass: plan.queryClass,
-      transforms,
-      directReply: `I couldn't complete web research on ${query}. Try again in a moment.`,
-    });
+    return finishWebSearch(trace, plan.queryClass, transforms, query, null, true);
   }
+}
+
+function finishWebSearch(
+  trace: RagTraceRecorder,
+  queryClass: QueryClass,
+  transforms: QueryTransform[],
+  topic: string,
+  results: TavilySearchResponse | null,
+  failed: boolean,
+) {
+  const settled = settleWebSearch({ topic, results, failed });
+  trace.step({
+    id: "crag",
+    label: "CRAG",
+    status: "done",
+    summary: settled.webResults
+      ? `${settled.webResults.results.length} web ${settled.webResults.results.length === 1 ? "result" : "results"}`
+      : failed
+        ? "Web search failed"
+        : "No usable web results",
+    lines: settled.webResults
+      ? settled.webResults.results.map((item) => item.title)
+      : ["The search did not return results."],
+  });
+
+  return finish(trace, {
+    chunks: [],
+    contradictions: [],
+    gateScore: settled.webResults ? 1 : 0,
+    weakEvidence: !settled.webResults,
+    webResults: settled.webResults,
+    queryClass,
+    transforms,
+    directReply: settled.directReply,
+    researchTopic: settled.webResults ? topic : null,
+  });
 }
 
 async function finishUncovered(
@@ -924,9 +1052,7 @@ async function finishUncovered(
     lines: [
       `Coverage ${formatScore(coverage)} is below ${RAG_TOPIC_COVERAGE_FLOOR}, or the passages do not mention the topic.`,
       focus ? `Notebook focus: ${focus}` : "No ready source text to describe.",
-      input.webSearchEnabled
-        ? "Offered web research."
-        : "Web search is off, so the reply asks the user to turn it on.",
+      "Offered web research. A yes on the next turn runs the search.",
     ],
   });
 
@@ -941,18 +1067,13 @@ async function finishUncovered(
     directReply: buildUncoveredTopicReply({
       topic,
       focus,
-      webSearchEnabled: input.webSearchEnabled,
     }),
-    suggestions: described.questions,
+    suggestions: [WEB_RESEARCH_ACCEPTANCE, ...described.questions].slice(0, 3),
     sourceSamples: samples,
   });
 }
 
 async function answerAcceptedResearch(
-  input: {
-    workspaceId: string;
-    webSearchEnabled: boolean;
-  },
   topic: string,
   trace: RagTraceRecorder,
 ): Promise<RagPipelineResult> {
@@ -963,36 +1084,6 @@ async function answerAcceptedResearch(
     summary: "Web research accepted",
     lines: [`Topic: ${topic}`],
   });
-
-  if (!input.webSearchEnabled) {
-    const samples = await loadNotebookSamples(input.workspaceId, []);
-    const questions = await suggestFollowUpQuestions({
-      question: topic,
-      answer: `The notebook does not cover ${topic}.`,
-      passages: samples,
-      preferNotebook: true,
-    });
-    trace.step({
-      id: "source-coverage",
-      label: "Source coverage",
-      status: "done",
-      summary: "Web search is off",
-      lines: ["The user agreed to research, and the web search toggle is off."],
-    });
-    return finish(trace, {
-      chunks: [],
-      contradictions: [],
-      gateScore: 0,
-      weakEvidence: true,
-      webResults: null,
-      queryClass: "simple_factual",
-      transforms: [],
-      directReply: `Web search is off. Turn it on and ask again, and I'll research ${topic}.`,
-      suggestions: questions,
-      sourceSamples: samples,
-    });
-  }
-
   trace.step({
     id: "crag",
     label: "CRAG",
@@ -1002,57 +1093,18 @@ async function answerAcceptedResearch(
   });
 
   try {
-    const webResults = await searchWeb(topic);
-    trace.step({
-      id: "crag",
-      label: "CRAG",
-      status: "done",
-      summary: `${webResults.results.length} web ${webResults.results.length === 1 ? "result" : "results"}`,
-      lines: webResults.results.map((item) => item.title),
-    });
-
-    if (webResults.results.length === 0) {
-      return finish(trace, {
-        chunks: [],
-        contradictions: [],
-        gateScore: 0,
-        weakEvidence: true,
-        webResults: null,
-        queryClass: "simple_factual",
-        transforms: [],
-        directReply: `I couldn't find web results on ${topic}. Try again in a moment.`,
-      });
-    }
-
-    return finish(trace, {
-      chunks: [],
-      contradictions: [],
-      gateScore: 1,
-      weakEvidence: false,
+    const webResults = await searchWebIfAllowed({ allowed: true, query: topic });
+    return finishWebSearch(
+      trace,
+      "simple_factual",
+      [],
+      topic,
       webResults,
-      queryClass: "simple_factual",
-      transforms: [],
-      researchTopic: topic,
-    });
+      false,
+    );
   } catch {
     logRagEvent("web-research", { failed: true });
-    trace.step({
-      id: "crag",
-      label: "CRAG",
-      status: "done",
-      summary: "Web search failed",
-      lines: ["The search did not return results."],
-    });
-    return finish(trace, {
-      chunks: [],
-      contradictions: [],
-      gateScore: 0,
-      weakEvidence: true,
-      webResults: null,
-      queryClass: "simple_factual",
-      transforms: [],
-      directReply: `I couldn't complete web research on ${topic}. Try again in a moment.`,
-    });
+    return finishWebSearch(trace, "simple_factual", [], topic, null, true);
   }
 }
 

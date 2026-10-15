@@ -517,7 +517,17 @@ function isAbsenceStatement(span: string) {
   return ABSENCE_STATEMENT.test(span.replace(/\[W?\d+\]/g, " "));
 }
 
-function citedTextSupports(span: string, evidenceText: string) {
+/**
+ * Whether the cited passage contains the distinctive tokens in a claim.
+ *
+ * A claim with no email, phone, number, or later proper noun is treated as a
+ * paraphrase and kept. Tokens that are present must appear in the passage.
+ *
+ * @param span - One sentence from the answer, including any citation marker
+ * @param evidenceText - Text of the cited chunk or web snippet
+ * @returns True when every distinctive token is in the passage
+ */
+export function citedTextSupports(span: string, evidenceText: string) {
   return distinctiveTokens(span).every((token) =>
     evidenceHasToken(token, evidenceText),
   );

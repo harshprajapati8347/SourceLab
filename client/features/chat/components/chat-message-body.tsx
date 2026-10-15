@@ -3,7 +3,11 @@
 import { useMemo } from "react";
 import { Streamdown } from "streamdown";
 import { code } from "@streamdown/code";
-import { getCitationByIndex } from "../lib/citations";
+import {
+  getCitationByIndex,
+  getWebCitation,
+  isSafeHttpUrl,
+} from "../lib/citations";
 import type { ChatCitation } from "../lib/types";
 import { CitationMarker } from "./citation-marker";
 
@@ -42,12 +46,9 @@ export function ChatMessageBody({
       }) => {
         if (web) {
           const webIndex = Number(web ?? children);
-          const webCitations = citations.filter(
-            (citation) => citation.sourceType === "WEB",
-          );
-          const citation = webCitations[webIndex - 1];
+          const citation = getWebCitation(citations, webIndex);
 
-          if (!citation) {
+          if (!citation || !isSafeHttpUrl(citation.url)) {
             return (
               <span className="font-medium text-primary-ink">[W{webIndex}]</span>
             );

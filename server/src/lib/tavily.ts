@@ -13,6 +13,34 @@ export type TavilySearchResponse = {
   results: TavilySearchResult[];
 };
 
+/**
+ * Whether a web result URL can be shown as a link.
+ *
+ * Only http and https are accepted. Empty strings and other protocols are dropped
+ * before marker numbers are assigned.
+ *
+ * @param url - URL returned by the search provider
+ * @returns True when the URL is safe to cite and render
+ */
+export function isSafeHttpUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Drops search rows that have no usable http(s) URL.
+ *
+ * @param results - Provider rows, which may include blank or unsafe URLs
+ * @returns Rows that can be numbered as `[W#]` citations
+ */
+export function keepUsableWebResults(results: TavilySearchResult[]) {
+  return results.filter((result) => isSafeHttpUrl(result.url));
+}
+
 let client: ReturnType<typeof tavily> | null = null;
 
 /**
@@ -43,12 +71,14 @@ export async function searchWeb(query: string): Promise<TavilySearchResponse> {
   return {
     query,
     answer: typeof response.answer === "string" ? response.answer : undefined,
-    results: (response.results ?? []).map((result) => ({
-      title: result.title ?? result.url ?? "Untitled",
-      url: result.url ?? "",
-      content: result.content ?? "",
-      score: result.score,
-    })),
+    results: keepUsableWebResults(
+      (response.results ?? []).map((result) => ({
+        title: result.title ?? result.url ?? "Untitled",
+        url: result.url ?? "",
+        content: result.content ?? "",
+        score: result.score,
+      })),
+    ),
   };
 }
 

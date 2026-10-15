@@ -15,7 +15,6 @@ describe("uncovered topic replies", () => {
     const reply = buildUncoveredTopicReply({
       topic: "Software Engineering",
       focus: "AI",
-      webSearchEnabled: true,
     });
 
     assert.equal(
@@ -25,15 +24,17 @@ describe("uncovered topic replies", () => {
     assert.equal(pendingWebResearchTopic(`assistant: ${reply}`), "Software Engineering");
   });
 
-  it("asks the user to turn web search on when it is unavailable", () => {
+  it("asks for web research even when the toggle is off", () => {
     const reply = buildUncoveredTopicReply({
       topic: "Software Engineering",
       focus: "AI",
-      webSearchEnabled: false,
     });
 
-    assert.match(reply, /Turn on Web search/);
-    assert.equal(pendingWebResearchTopic(reply), null);
+    assert.match(reply, /Would you like me to perform web research on Software Engineering\?/);
+    assert.equal(
+      pendingWebResearchTopic(`assistant: ${reply}`),
+      "Software Engineering",
+    );
   });
 
   it("labels a definition question without the leading words", () => {
@@ -73,6 +74,18 @@ describe("uncovered topic replies", () => {
   it("accepts a short yes and ignores a new question", () => {
     assert.equal(acceptsWebResearch("Yes, please"), true);
     assert.equal(acceptsWebResearch("yes, search the web"), true);
+    assert.equal(acceptsWebResearch("Yes, search the web?"), true);
     assert.equal(acceptsWebResearch("What is Software Engineering?"), false);
+  });
+
+  it("reads the offer only from the latest assistant turn", () => {
+    const turns = [
+      "assistant: Would you like me to perform web research on Pricing?",
+      "user: yes",
+      "assistant: The price is listed in the notebook.",
+      "user: How do I upload a document securely to Amazon S3 using Node.js?",
+    ].join("\n");
+
+    assert.equal(pendingWebResearchTopic(turns), null);
   });
 });

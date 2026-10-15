@@ -173,26 +173,6 @@ export function separateEmbeddedInstruction(text: string) {
 }
 
 /**
- * Adds `[W#]` markers when a web answer did not cite its results.
- *
- * @param answer - Released assistant text
- * @param resultCount - How many web results belong to this turn
- * @returns The answer, with a web-source line when markers were missing
- */
-export function ensureWebSourceMarkers(answer: string, resultCount: number) {
-  if (resultCount <= 0 || /\[W\d+\]/.test(answer)) {
-    return answer;
-  }
-
-  const markers = Array.from(
-    { length: resultCount },
-    (_, index) => `[W${index + 1}]`,
-  ).join(" ");
-
-  return `${answer.trim()}\n\nWeb sources: ${markers}`;
-}
-
-/**
  * Adds the note that embedded source instructions were ignored.
  *
  * @param answer - Released assistant text

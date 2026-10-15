@@ -6,7 +6,6 @@ import {
   asksConflictingValues,
   buildInsufficientEvidenceReply,
   conflictRetrievalQueries,
-  ensureWebSourceMarkers,
   isDocumentQuestion,
   isWebSearchEligible,
   separateEmbeddedInstruction,
@@ -103,16 +102,6 @@ describe("request disposition", () => {
     assert.equal(shouldDeferOffTopic("Write me a poem about cats", true), false);
   });
 
-  it("adds a marker for every web result when the answer cites none", () => {
-    assert.equal(
-      ensureWebSourceMarkers("The official price is listed on the pricing page.", 2),
-      "The official price is listed on the pricing page.\n\nWeb sources: [W1] [W2]",
-    );
-    assert.equal(
-      ensureWebSourceMarkers("See [W1] for the price.", 2),
-      "See [W1] for the price.",
-    );
-  });
 });
 
 function chunk(

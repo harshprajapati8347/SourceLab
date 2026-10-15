@@ -69,7 +69,10 @@ const TERM_STOPWORDS = new Set([
 ]);
 
 const AFFIRMATIVE =
-  /^(?:yes|yeah|yep|yup|sure|ok|okay|please|go ahead|do it|do that|sounds good)(?:[,!]?\s+(?:please|do it|go ahead|search(?: the web)?|do the research|research it))*[.!]?$/i;
+  /^(?:yes|yeah|yep|yup|sure|ok|okay|please|go ahead|do it|do that|sounds good)(?:[,!]?\s+(?:please|do it|go ahead|search(?: the web)?|do the research|research it))*[.!?]?$/i;
+
+/** Suggestion chip that accepts the research offer on the next turn. */
+export const WEB_RESEARCH_ACCEPTANCE = "Yes, search the web";
 
 const RESEARCH_OFFER =
   /Would you like me to perform web research on ([^?\n]+)\?/g;
@@ -210,36 +213,68 @@ export function normalizeFocus(value: string | null | undefined) {
 /**
  * Writes the reply used when the notebook does not cover the question.
  *
- * @param input - Topic label, notebook focus, and whether web search can run
+ * The question is the consent offer. A short yes on the next turn, or sending
+ * the same topic again with Web Search on, is what allows Tavily.
+ *
+ * @param input - Topic label and notebook focus
  * @returns The user-facing gap reply
  */
 export function buildUncoveredTopicReply(input: {
   topic: string;
   focus: string | null;
-  webSearchEnabled: boolean;
 }) {
   const topic = input.topic.trim() || "that topic";
   const focus = normalizeFocus(input.focus);
   const coverage = focus
     ? `Your sources don't seem to cover ${topic}. Your notebook currently focuses on ${focus}.`
     : `Your sources don't seem to cover ${topic}. This notebook doesn't have ready sources yet.`;
-  const next = input.webSearchEnabled
-    ? `Would you like me to perform web research on ${topic}?`
-    : `Turn on Web search if you'd like me to research ${topic}.`;
 
-  return `${coverage} ${next}`;
+  return `${coverage} Would you like me to perform web research on ${topic}?`;
 }
 
 /**
- * Reads the topic from the latest web-research offer in the conversation.
+ * Reads the topic from the latest assistant turn, and only that turn.
  *
- * @param recentTurns - Role-labelled recent messages
- * @returns The offered topic, or null when no offer is present
+ * An older offer does not authorize a later, unrelated question.
+ *
+ * @param recentTurns - Role-labelled recent messages, one turn per line
+ * @returns The offered topic, or null when the latest assistant turn has no offer
  */
 export function pendingWebResearchTopic(recentTurns: string) {
-  const matches = [...recentTurns.matchAll(RESEARCH_OFFER)];
+  const latestAssistant = recentTurns
+    .split("\n")
+    .filter((line) => /^assistant:/i.test(line.trim()))
+    .at(-1);
+
+  if (!latestAssistant) {
+    return null;
+  }
+
+  const matches = [...latestAssistant.matchAll(RESEARCH_OFFER)];
   const topic = matches.at(-1)?.[1]?.trim();
   return topic || null;
+}
+
+/**
+ * Whether this message is the same topic the assistant just offered to research.
+ *
+ * @param userText - Latest user message
+ * @param topic - Topic from the latest assistant offer
+ * @returns True when the user sent that topic again
+ */
+export function repeatsOfferedTopic(userText: string, topic: string) {
+  const offered = topic.replace(/\s+/g, " ").trim().toLowerCase().replace(/[?.!]+$/g, "");
+  const user = userText.replace(/\s+/g, " ").trim().toLowerCase().replace(/[?.!]+$/g, "");
+
+  if (!offered || !user) {
+    return false;
+  }
+
+  if (user === offered) {
+    return true;
+  }
+
+  return topicFromQuestion(userText).toLowerCase() === offered;
 }
 
 /**

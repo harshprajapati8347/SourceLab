@@ -20,7 +20,7 @@ import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 import { SOURCE_TYPE_LABELS } from "@/features/sources/lib/constants";
 import type { SourceType } from "@/features/sources/lib/types";
 import { sourceRoutes } from "@/features/sources/lib/routes";
-import { uniqueCitationsBySource } from "../lib/citations";
+import { isSafeHttpUrl, uniqueCitationsBySource } from "../lib/citations";
 import type { ChatCitation } from "../lib/types";
 import { CitationPreview } from "./citation-preview";
 
@@ -66,7 +66,7 @@ export function CitationSources({
     }
 
     if (citation.sourceType === "WEB") {
-      return Boolean(citation.url);
+      return isSafeHttpUrl(citation.url);
     }
 
     return true;
@@ -98,7 +98,8 @@ export function CitationSources({
             .join(" · ");
           const citationKey =
             citation.sourceId ?? citation.url ?? citation.sourceTitle;
-          const isWeb = citation.sourceType === "WEB" && citation.url;
+          const isWeb =
+            citation.sourceType === "WEB" && isSafeHttpUrl(citation.url);
 
           return (
             <HoverCard key={citationKey}>
