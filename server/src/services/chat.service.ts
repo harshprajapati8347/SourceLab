@@ -618,7 +618,11 @@ export async function streamWorkspaceChat(
           summary: "Checking the reply",
           lines: [],
         });
-        const checked = await checkOutputGuards(candidate);
+        const checked = await checkOutputGuards(
+          candidate,
+          undefined,
+          chunkCitations,
+        );
         pushStep({
           id: "output-guard",
           label: "Output guard",

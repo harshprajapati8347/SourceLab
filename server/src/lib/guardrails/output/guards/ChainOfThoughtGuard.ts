@@ -1,5 +1,5 @@
-import { OutputGuard } from "../../../core/contracts.js";
-import { ChatResponse, GuardDecision, GuardResult } from "../../../core/models.js";
+import { OutputGuard } from '../../../core/contracts.js';
+import { ChatResponse, GuardDecision, GuardResult } from '../../../core/models.js';
 
 export class ChainOfThoughtGuard implements OutputGuard {
   private readonly chainKeywords = [

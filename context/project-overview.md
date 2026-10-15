@@ -125,7 +125,7 @@ The source library UI polls sources with pending/processing status every 3 secon
 - Five source ingestion paths: text, markdown, PDF upload, website scrape, YouTube transcript (+ web-search-to-source)
 - Background source processing pipeline: extraction → chunking → embedding → Pinecone indexing, with status tracking and reprocessing
 - Source library with search, type/status filters, grid/list view, multi-select bulk delete, bulk reprocess of failed sources
-- Per-workspace multi-conversation RAG chat with streaming, citations, model selection, optional web search tool, query classification, corrective retrieval, context compression, conversation export, delete, local input PII rejection, and local output length and chain-of-thought checks
+- Per-workspace multi-conversation RAG chat with streaming, citations, model selection, optional web search tool, query classification, corrective retrieval, context compression, conversation export, delete, and local input and output guardrails (injection, jailbreak, PII, length, citation shape, sensitive data, prompt leakage, chain-of-thought, and markup checks)
 - Rolling conversation summarization for long chats
 - Six learning artifact types generated from workspace sources, each with a dedicated viewer
 - User memory and notebook memory (manual + auto-learned) via Mem0

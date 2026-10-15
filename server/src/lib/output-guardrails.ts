@@ -1,8 +1,9 @@
 /**
  * Output guardrails for a drafted chat answer.
  *
- * Length and chain-of-thought checks run on the text that would be released.
- * A rejection replaces that text. The draft is not returned.
+ * The local output guards run on the text that would be released, after
+ * grounding. A rejection replaces that text. A sanitizing guard returns the
+ * modified text. The draft is not returned when a check rejects or throws.
  */
 
 import { guardrailsConfig } from "./config/guardrails.js";
@@ -58,26 +59,39 @@ export function textReleasedAfterOutputCheck(
 /**
  * Runs the local output guards on text that may be released.
  *
+ * `sources` is the workspace chunk list in `[1]` order. Web pages stay out of
+ * that list because their markers are `[W#]`.
+ *
  * @param text - Answer after grounding and release transforms
  * @param service - Guard runner. Tests can pass a double.
- * @returns The same text, or a replacement when a guard rejects
+ * @param sources - Workspace chunks the numeric citations may name
+ * @returns The checked text, or a replacement when a guard rejects
  * @throws When a guard fails to execute
  */
 export async function checkOutputGuards(
   text: string,
   service: OutputChecker = getOutputGuards(),
+  sources: ChatResponse["sources"] = [],
 ): Promise<OutputGuardStep> {
+  const checker = service ?? getOutputGuards();
+  const sourceList = sources ?? [];
+
   try {
-    const checked = await service.validateAndSanitize({
+    const checked = await checker.validateAndSanitize({
       message: { role: "assistant", content: text },
-      sources: [],
+      sources: sourceList,
     });
+    const sanitized = checked.message.content !== text;
 
     return {
       text: checked.message.content,
       blocked: false,
-      summary: "Allowed",
-      lines: ["Length and chain-of-thought checks passed."],
+      summary: sanitized ? "Sanitized" : "Allowed",
+      lines: [
+        sanitized
+          ? "Output checks sanitized the reply."
+          : "Output checks passed.",
+      ],
     };
   } catch (error) {
     if (error instanceof OutputGuardError) {

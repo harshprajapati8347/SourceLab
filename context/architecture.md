@@ -161,7 +161,7 @@ Client useChat → POST /api/workspaces/:workspaceId/chat  (DefaultChatTransport
         ↓
 streamWorkspaceChat():
   - input guardrails, then resolve/create Conversation, deduct 0.1 credits, save user Message.
-    PII in the latest user message blocks with HTTP 400 and restores that message in the composer.
+    The latest user message is checked before RAG. A block returns HTTP 400 and restores that message in the composer. Detected values stay on the server. Unicode normalization and control-character removal apply only to the text sent onward.
   - in parallel: runRagPipeline() and searchMemoriesForChat() [Mem0 user memory + this notebook's memory]
         ↓
 runRagPipeline():
@@ -189,7 +189,7 @@ streamWorkspaceChat() continues:
     user memory, notebook memory, summary, weak-evidence note, and any corrective web results
   - the same steps are logged as `[rag]` console lines. They are streamed as a `data-rag` part only when `RAG_TRACE_ENABLED=true`
   - streamText() (AI SDK) with optional web_search tool (Tavily) runs on the server only when this request may search. Later web searches append to the same `[W#]` list. A marker stays only when that page supports the sentence. Web pages are labeled as outside the workspace
-  - output guardrails then reject an over-long reply or chain-of-thought leakage and replace it before anything is written
+  - output guardrails then run on the buffered draft, with workspace chunks as the `[1]` source list. A rejection or a failed check replaces the reply before anything is written. Sanitizing guards release the modified text. `[W#]` markers are unchanged by that numeric check
   - only the safe text is written to the UI stream, with citations. Up to three short follow-up questions are streamed as `data-suggestions` and stored on the message trace. Coverage is added to the trace when that trace is enabled
   - onFinish: save that safe assistant Message + citations (workspace chunks and web
               results, excerpts shortened, `cited` set from markers that remain),

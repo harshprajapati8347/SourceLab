@@ -64,7 +64,11 @@ export class PiiDetector {
     {
       type: 'IFSC',
       regex: /\b[A-Z]{4}0[A-Z0-9]{6}\b/g,
-    }
+    },
+    {
+      type: 'URL',
+      regex: /\bhttps?:\/\/[^\s<>"']+/gi,
+    },
   ];
 
   detect(text: string): DetectedItem[] {

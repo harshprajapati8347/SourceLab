@@ -1,6 +1,6 @@
-import { InputGuard } from "../../../core/contracts.js";
-import { GuardDecision, GuardRequest, GuardResult } from "../../../core/models.js";
-import { PiiDetector, type DetectedItem } from "../../shared/pii-detector.js";
+import { InputGuard } from '../../../core/contracts.js';
+import { GuardDecision, GuardRequest, GuardResult } from '../../../core/models.js';
+import { PiiDetector, type DetectedItem } from '../../shared/pii-detector.js';
 
 export type { DetectedItem };
 
