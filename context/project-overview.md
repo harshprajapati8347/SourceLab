@@ -125,7 +125,7 @@ The source library UI polls sources with pending/processing status every 3 secon
 - Five source ingestion paths: text, markdown, PDF upload, website scrape, YouTube transcript (+ web-search-to-source)
 - Background source processing pipeline: extraction → chunking → embedding → Pinecone indexing, with status tracking and reprocessing
 - Source library with search, type/status filters, grid/list view, multi-select bulk delete, bulk reprocess of failed sources
-- Per-workspace multi-conversation RAG chat with streaming, citations, model selection, optional web search tool, query classification, corrective retrieval, context compression, conversation export, and delete
+- Per-workspace multi-conversation RAG chat with streaming, citations, model selection, optional web search tool, query classification, corrective retrieval, context compression, conversation export, delete, local input PII rejection, and local output length and chain-of-thought checks
 - Rolling conversation summarization for long chats
 - Six learning artifact types generated from workspace sources, each with a dedicated viewer
 - User memory and notebook memory (manual + auto-learned) via Mem0
@@ -142,7 +142,7 @@ The source library UI polls sources with pending/processing status every 3 secon
 - strict mode rag for only using the sources in the workspace otherwise deny answers
 - Source Management: One-click source deletion, metadata inspection drawer, and re-indexing pipeline trigger.
 - LLM Context Reranking: LLMRerankerProvider re-scores and re-orders accepted chunks so the most relevant context sits at the top of the prompt window.
-- Multi-Layer Guardrails: Input guards (prompt injection, jailbreak defense, max length, PII detection) and Output guards (citation verification, response length validation).
+- The remaining open-source guards that are not in this repo: prompt injection, jailbreak, SQL/XSS, URL, spam, citation, sensitive-data, prompt-leakage, markdown, and HTML checks. Input PII rejection and output length and chain-of-thought checks are in scope.
 - Server-Sent Events (SSE) Streaming: Low-latency token-by-token streaming using LLM Chat providers.
 - Bonus AI Artifact Studios:
 - AI Audio Podcast Studio: Synthesizes a two-speaker host dialogue podcast (male & female voice roles) from notebook sources with an interactive Web Speech API player, playback speed controls, transcript toggle, and text script download.

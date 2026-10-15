@@ -46,7 +46,7 @@ Not in scope: OAuth providers other than Google, shared workspaces, artifact in-
 | Database | PostgreSQL + Prisma 7 | Relational data |
 | Vectors | Pinecone | Per-workspace RAG namespaces |
 | LLM | OpenAI | `text-embedding-3-small`, `gpt-4o-mini` / `gpt-4o` |
-| Guardrails | `@openai/guardrails` | Chat input and output gates |
+| Guardrails | Local `server/src/lib/guardrails` | Input PII rejection; output length and chain-of-thought checks |
 | Jobs | Inngest | Source processing, artifact generation, conversation summaries, billing credit lifecycle |
 | Files | Cloudinary | PDF storage |
 | Ingestion | Firecrawl, `youtube-transcript`, `unpdf` | Websites, YouTube, PDFs |
@@ -67,7 +67,7 @@ Browser (localhost:3000)
 Express API (localhost:8080)
         ├── PostgreSQL (Prisma)     users, workspaces, sources, chat, artifacts, credits
         ├── Pinecone                embeddings, one namespace per workspace
-        ├── OpenAI                  embeddings + chat / artifact generation + guardrails
+        ├── OpenAI                  embeddings + chat / artifact generation
         ├── Inngest                 durable background jobs
         └── Cloudinary / Firecrawl / Tavily / Mem0 / Resend / Stripe
 ```
@@ -174,7 +174,7 @@ cp server/.env.example server/.env
 | `BETTER_AUTH_URL` | Yes | Client origin in local dev (`http://localhost:3000`) — Next rewrites `/api/auth` to the server |
 | `CLIENT_URL` | Yes | CORS + Better Auth trusted origin (`http://localhost:3000`) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Yes | Google OAuth |
-| `OPENAI_API_KEY` | Yes | Chat, artifacts, embeddings, guardrails |
+| `OPENAI_API_KEY` | Yes | Chat, artifacts, embeddings |
 | `PINECONE_API_KEY` | Yes | RAG index (auto-created if missing) |
 | `PINECONE_INDEX` | No | Defaults to `sourcelab` (1536 dims, cosine) |
 | `INNGEST_DEV` | Local | Set to `1` for the Inngest dev server |
@@ -266,7 +266,7 @@ Add sources from the workspace shell (Text / Markdown / PDF / Website / YouTube)
 | Script | Command | Purpose |
 | --- | --- | --- |
 | `dev` | `tsx watch src/index.ts` | API with reload (port 8080) |
-| `build` | `prisma generate && tsc` + copy guardrails config | Compile to `dist/` |
+| `build` | `prisma generate && tsc` | Compile to `dist/` |
 | `start` | `prisma migrate deploy && node dist/index.js` | Run the compiled API |
 | `test` | `tsx --test` on listed `*.test.ts` files | Server unit tests |
 | `prisma:generate` | `prisma generate` | Generate the Prisma client (`server/src/generated/prisma`) |

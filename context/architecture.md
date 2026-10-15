@@ -161,8 +161,7 @@ Client useChat → POST /api/workspaces/:workspaceId/chat  (DefaultChatTransport
         ↓
 streamWorkspaceChat():
   - input guardrails, then resolve/create Conversation, deduct 0.1 credits, save user Message.
-    Off Topic does not stop a document question or a current external question when web search is on.
-    A pure jailbreak still blocks. A request to obey instructions inside a document continues as the safe task
+    PII in the latest user message blocks with HTTP 400 and restores that message in the composer.
   - in parallel: runRagPipeline() and searchMemoriesForChat() [Mem0 user memory + this notebook's memory]
         ↓
 runRagPipeline():
@@ -182,8 +181,7 @@ runRagPipeline():
     Classifier and quality-judgement fallbacks use that same gap check, so an empty retrieval
     is not answered from general knowledge
   - semantic dedup, extractive compression, contradiction notes. Chunk text stays verbatim.
-    Source text is untrusted data. A request to obey instructions inside a document is removed,
-    the safe task still runs, and the reply says those instructions were not followed
+    Source text is untrusted data. The chat gate does not rewrite a request to obey instructions inside a document.
   - on classifier, HyDE, or coverage-judgement failure: fall open to one top-6 retrieval of the original message
         ↓
 streamWorkspaceChat() continues:
@@ -191,10 +189,10 @@ streamWorkspaceChat() continues:
     user memory, notebook memory, summary, weak-evidence note, and any corrective web results
   - the same steps are logged as `[rag]` console lines. They are streamed as a `data-rag` part only when `RAG_TRACE_ENABLED=true`
   - streamText() (AI SDK) with optional web_search tool (Tavily) runs on the server only when this request may search. Later web searches append to the same `[W#]` list. A marker stays only when that page supports the sentence. Web pages are labeled as outside the workspace
-  - output guardrails then mask PII, keep cited paraphrases, redact real credentials in place, and run moderation
+  - output guardrails then reject an over-long reply or chain-of-thought leakage and replace it before anything is written
   - only the safe text is written to the UI stream, with citations. Up to three short follow-up questions are streamed as `data-suggestions` and stored on the message trace. Coverage is added to the trace when that trace is enabled
   - onFinish: save that safe assistant Message + citations (workspace chunks and web
-              results, excerpts masked, `cited` set from markers that remain),
+              results, excerpts shortened, `cited` set from markers that remain),
               touch conversation, auto-title if new,
               every CONVERSATION_SUMMARY_INTERVAL (8) messages → enqueue conversation/summarize,
               fire-and-forget Mem0 addMemoriesFromMessages() with the safe text,
@@ -287,7 +285,7 @@ Auth tables (`user`, `session`, `account`, `verification`, `subscription`) are o
 | conversationId | String | FK → conversation, cascade delete |
 | role | enum `MessageRole` | `USER \| ASSISTANT` |
 | content | String | Plain text |
-| citations | Json? | Array of `{ sourceId, sourceTitle, sourceType, chunkId, chunkIndex, page?, excerpt, score?, cited? }` or web citations `{ sourceType: "WEB", sourceTitle, url, excerpt, cited? }`. `cited` is false when the final answer no longer uses that marker. Excerpts are masked for PII. |
+| citations | Json? | Array of `{ sourceId, sourceTitle, sourceType, chunkId, chunkIndex, page?, excerpt, score?, cited? }` or web citations `{ sourceType: "WEB", sourceTitle, url, excerpt, cited? }`. `cited` is false when the final answer no longer uses that marker. Excerpts are shortened to 280 characters. |
 | trace | Json? | Retrieval steps shown in chat: `{ steps: [{ id, label, status, summary, lines }] }` |
 
 ### `learning_artifact`

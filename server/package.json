@@ -5,8 +5,8 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "test": "tsx --test src/lib/output-guardrails.test.ts src/lib/tavily.test.ts src/lib/rag/answer-grounding.test.ts src/lib/rag/overview.test.ts src/lib/rag/query-intelligence.test.ts src/lib/rag/topic-gap.test.ts src/lib/rag/suggested-questions.test.ts src/lib/rag/request-disposition.test.ts src/lib/rag/web-search-policy.test.ts",
-    "build": "prisma generate && tsc && node scripts/copy-guardrails-config.mjs",
+    "test": "tsx --test src/lib/output-guardrails.test.ts src/lib/input-guardrails.test.ts src/lib/guardrails/input/InputGuardService.test.ts src/lib/guardrails/input/guards/PiiGuard.test.ts src/lib/guardrails/output/OutputGuardService.test.ts src/lib/tavily.test.ts src/lib/rag/answer-grounding.test.ts src/lib/rag/overview.test.ts src/lib/rag/query-intelligence.test.ts src/lib/rag/topic-gap.test.ts src/lib/rag/suggested-questions.test.ts src/lib/rag/request-disposition.test.ts src/lib/rag/web-search-policy.test.ts",
+    "build": "prisma generate && tsc",
     "start": "prisma migrate deploy && node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
@@ -22,7 +22,6 @@
     "@ai-sdk/openai": "^4.0.42",
     "@better-auth/stripe": "^1.7.2",
     "@mendable/firecrawl-js": "^4.32.2",
-    "@openai/guardrails": "^0.3.0",
     "@pinecone-database/pinecone": "^8.2.0",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",

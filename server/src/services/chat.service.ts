@@ -9,13 +9,12 @@
  *   → save to DB
  *   → query intelligence, RAG retrieval, context processing + Mem0 memories
  *   → streamText (AI SDK) with optional web search tool
- *   → output guardrails, then release the safe reply
+ *   → grounding, then output guardrails, then release the safe reply
  *   → save assistant reply + citations
  *   → optional summary job + Mem0 learning
  * ```
  */
 
-import { GuardrailTripwireTriggered } from "@openai/guardrails";
 import { openai } from "@ai-sdk/openai";
 import type { Response } from "express";
 import { z } from "zod";
@@ -89,17 +88,12 @@ import {
   type TavilySearchResponse,
 } from "../lib/tavily.js";
 import { CREDIT_COSTS } from "../config/plans.js";
+import { assertChatInputAllowed } from "../lib/input-guardrails.js";
 import {
-  assertChatInputAllowed,
-  toInputBlockedError,
-} from "../lib/input-guardrails.js";
-import {
+  OUTPUT_BLOCKED_MESSAGE,
   OUTPUT_CHECK_FAILED_MESSAGE,
-  OUTPUT_POLICY_MESSAGE,
-  checkOutputPolicy,
-  checkOutputSecrets,
-  maskOutputPii,
-  outputSpansAreDisclosable,
+  checkOutputGuards,
+  textReleasedAfterOutputCheck,
 } from "../lib/output-guardrails.js";
 import { checkAndDeductCredits } from "./credits.service.js";
 import { NotFoundError, ValidationError } from "../types/app-error.js";
@@ -256,7 +250,7 @@ async function resolveConversation(
  * 2. Resolve/create conversation, reject a thread already at the message limit, and save the user message
  * 3. Parallel: query and context pipeline + Mem0 search (user memory and this notebook)
  * 4. Build system prompt and generate the model response via AI SDK
- * 5. Mask PII, check grounding and citations, then run policy and secret checks
+ * 5. Check grounding and citations, then run local output guards
  * 6. On finish: save the safe assistant message, citations, title, summary job, Mem0 learning
  *
  * @param res - Express response (streamed via `pipeUIMessageStreamToResponse`)
@@ -294,21 +288,9 @@ export async function streamWorkspaceChat(
     throw new ValidationError("A user message is required");
   }
 
-  let textForModel = userText;
-  let ignoredEmbeddedInstructions = false;
-
-  try {
-    const decision = await assertChatInputAllowed(userText, {
-      webSearchEnabled,
-    });
-    textForModel = decision.textForModel;
-    ignoredEmbeddedInstructions = decision.ignoredEmbeddedInstructions;
-  } catch (error) {
-    if (error instanceof GuardrailTripwireTriggered) {
-      throw toInputBlockedError(error, userText);
-    }
-    throw error;
-  }
+  const decision = await assertChatInputAllowed(userText);
+  const textForModel = decision.textForModel;
+  const ignoredEmbeddedInstructions = decision.ignoredEmbeddedInstructions;
 
   const conversation = await resolveConversation(
     workspaceId,
@@ -551,22 +533,6 @@ export async function streamWorkspaceChat(
 
       try {
         pushStep({
-          id: "output-pii",
-          label: "Output PII",
-          status: "active",
-          summary: "Masking sensitive details",
-          lines: [],
-        });
-        const pii = await maskOutputPii(drafted);
-        pushStep({
-          id: "output-pii",
-          label: "Output PII",
-          status: "done",
-          summary: pii.summary,
-          lines: pii.lines,
-        });
-
-        pushStep({
           id: "grounding",
           label: "Grounding",
           status: "active",
@@ -575,7 +541,7 @@ export async function streamWorkspaceChat(
         });
         const grounded = await groundAnswer({
           question: textForModel,
-          answer: pii.text,
+          answer: drafted,
           chunks: evidenceChunks.map((chunk) => ({
             title: chunk.sourceTitle,
             text: chunk.text,
@@ -585,17 +551,6 @@ export async function streamWorkspaceChat(
             text: item.content,
           })),
         });
-
-        const policy = await checkOutputPolicy(grounded.text);
-        const secrets = await checkOutputSecrets(policy.text);
-        const released = secrets.text;
-
-        const quoteClaims =
-          !policy.blocked &&
-          secrets.text === policy.text &&
-          (await outputSpansAreDisclosable(
-            grounded.claims.map((claim) => claim.span).join("\n"),
-          ));
 
         pushStep({
           id: "grounding",
@@ -609,9 +564,7 @@ export async function streamWorkspaceChat(
           label: "Citations",
           status: "done",
           summary: grounded.citations.summary,
-          lines: quoteClaims
-            ? grounded.citations.lines
-            : grounded.citations.safeLines,
+          lines: grounded.citations.lines,
         });
         pushStep({
           id: "coverage",
@@ -620,64 +573,65 @@ export async function streamWorkspaceChat(
           summary: grounded.coverage.summary,
           lines: grounded.coverage.lines,
         });
+
+        const searchAllowed =
+          webSearchEnabled || Boolean(pipeline.researchTopic);
+        let candidate = pruneUnsupportedWebMarkers(
+          grounded.text,
+          webSearchResults?.results ?? [],
+        );
+        if ((webSearchResults?.results.length ?? 0) > 0) {
+          candidate = retainCitedWebSentences(candidate);
+        }
+
+        let offeredResearch = false;
+        if (
+          webSearchFailed &&
+          (webSearchResults?.results.length ?? 0) === 0 &&
+          evidenceChunks.length === 0 &&
+          pipeline.queryClass !== "conversational"
+        ) {
+          candidate = webSearchFailedReply(topicFromQuestion(textForModel));
+        } else {
+          const beforeConsent = candidate;
+          candidate = replaceUnauthorizedAnswer({
+            answer: candidate,
+            searchAllowed,
+            chunkCount: evidenceChunks.length,
+            withheld: grounded.withheld,
+            conversational: pipeline.queryClass === "conversational",
+            topic: topicFromQuestion(textForModel),
+            focus: focusFromTitles(
+              pipeline.sourceSamples.map((sample) => sample.title),
+            ),
+          });
+          offeredResearch = candidate !== beforeConsent;
+        }
+        if (ignoredEmbeddedInstructions) {
+          candidate = appendEmbeddedInstructionNote(candidate);
+        }
+
         pushStep({
-          id: "policy",
-          label: "Policy",
-          status: "done",
-          summary: policy.summary,
-          lines: policy.lines,
+          id: "output-guard",
+          label: "Output guard",
+          status: "active",
+          summary: "Checking the reply",
+          lines: [],
         });
+        const checked = await checkOutputGuards(candidate);
         pushStep({
-          id: "sensitive",
-          label: "Sensitive data",
+          id: "output-guard",
+          label: "Output guard",
           status: "done",
-          summary: secrets.summary,
-          lines: secrets.lines,
+          summary: checked.summary,
+          lines: checked.lines,
         });
 
-        finalText = released;
-        if (
-          finalText !== OUTPUT_CHECK_FAILED_MESSAGE &&
-          finalText !== OUTPUT_POLICY_MESSAGE
-        ) {
-          const searchAllowed =
-            webSearchEnabled || Boolean(pipeline.researchTopic);
-          finalText = pruneUnsupportedWebMarkers(
-            finalText,
-            webSearchResults?.results ?? [],
-          );
-          if ((webSearchResults?.results.length ?? 0) > 0) {
-            finalText = retainCitedWebSentences(finalText);
-          }
-          if (
-            webSearchFailed &&
-            (webSearchResults?.results.length ?? 0) === 0 &&
-            evidenceChunks.length === 0 &&
-            pipeline.queryClass !== "conversational"
-          ) {
-            finalText = webSearchFailedReply(topicFromQuestion(textForModel));
-          } else {
-            const beforeConsent = finalText;
-            finalText = replaceUnauthorizedAnswer({
-              answer: finalText,
-              searchAllowed,
-              chunkCount: evidenceChunks.length,
-              withheld: grounded.withheld,
-              conversational: pipeline.queryClass === "conversational",
-              topic: topicFromQuestion(textForModel),
-              focus: focusFromTitles(
-                pipeline.sourceSamples.map((sample) => sample.title),
-              ),
-            });
-            if (finalText !== beforeConsent) {
-              suggestions = [WEB_RESEARCH_ACCEPTANCE];
-            }
-          }
-          if (ignoredEmbeddedInstructions) {
-            finalText = appendEmbeddedInstructionNote(finalText);
-          }
+        finalText = textReleasedAfterOutputCheck(checked, false);
+        if (!checked.blocked && offeredResearch) {
+          suggestions = [WEB_RESEARCH_ACCEPTANCE];
         }
-        citations = await maskCitationExcerpts(
+        citations = await shortenCitationExcerpts(
           assembleCitations({
             chunks: chunkCitations,
             webResults: webSearchResults,
@@ -689,7 +643,7 @@ export async function streamWorkspaceChat(
           failed: true,
           error: error instanceof Error ? error.name : "Error",
         });
-        finalText = OUTPUT_CHECK_FAILED_MESSAGE;
+        finalText = textReleasedAfterOutputCheck(undefined, true);
         citations = clearCitationExcerpts(
           assembleCitations({
             chunks: chunkCitations,
@@ -725,7 +679,7 @@ export async function streamWorkspaceChat(
       if (
         suggestions.length === 0 &&
         finalText !== OUTPUT_CHECK_FAILED_MESSAGE &&
-        finalText !== OUTPUT_POLICY_MESSAGE
+        finalText !== OUTPUT_BLOCKED_MESSAGE
       ) {
         const prepared = pipeline.suggestions ?? [];
         const passages = passagesForSuggestions(
@@ -878,24 +832,19 @@ function formatRecentTurns(messages: UIMessage[]) {
 }
 
 /**
- * Masks PII in the full excerpt, then keeps the first 280 characters.
- *
- * Masking runs on the full excerpt first. The saved preview is the first 280 characters of that masked text.
+ * Keeps the first 280 characters of each citation excerpt.
  *
  * @param items - Citations about to be saved
- * @returns The same citations with masked, shortened excerpts
+ * @returns The same citations with shortened excerpts
  */
-async function maskCitationExcerpts(items: SavedCitation[]) {
-  return Promise.all(
-    items.map(async (citation) => {
-      if (!citation.excerpt.trim()) {
-        return citation;
-      }
+function shortenCitationExcerpts(items: SavedCitation[]) {
+  return items.map((citation) => {
+    if (!citation.excerpt.trim()) {
+      return citation;
+    }
 
-      const masked = await maskOutputPii(citation.excerpt);
-      return { ...citation, excerpt: masked.text.slice(0, 280) };
-    }),
-  );
+    return { ...citation, excerpt: citation.excerpt.slice(0, 280) };
+  });
 }
 
 /**
