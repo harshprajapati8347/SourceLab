@@ -174,8 +174,28 @@ Hook: `useSignOut` (`hooks/use-sign-out.ts`). `app/(auth)/layout.tsx` is a split
 | Component | Description |
 | --- | --- |
 | `BillingSettings` (`billing-settings.tsx`) | `/settings/billing` in `AccountShell`: plan badge, credits left, Upgrade / Manage billing / Compare plans |
-| `PricingPage` (`pricing-page.tsx`) | Two plan `Card`s. Standalone `/pricing` adds a slim header; `embedded` is the landing section |
+| `PricingPage` (`pricing-page.tsx`) | Two plan `Card`s. Standalone `/pricing` uses `PublicHeader` and `PublicFooter`; `embedded` is the landing section |
 | `CreditsBadge` (`credits-badge.tsx`) | Outline pill linking to billing with remaining credits |
+
+### `features/consent/components/`
+| Component | Description |
+| --- | --- |
+| `CookieConsent` (`cookie-consent.tsx`) | Banner plus preferences dialog, mounted once in the root layout. Necessary is locked on. Analytics is optional. The landing page (`/`) adds `dark` because that page does not follow the theme toggle |
+| `CookiePreferencesButton` (`cookie-preferences-button.tsx`) | Text button that reopens the preferences dialog |
+
+### `features/legal/components/`
+| Component | Description |
+| --- | --- |
+| `LegalDocument` (`legal-document.tsx`) | Public legal page: `PublicHeader`, one `h1`, muted review notice, `PublicFooter` |
+| `LegalPlaceholder` (`legal-placeholder.tsx`) | Inline `font-mono` chip for unpublished facts |
+| `PrivacyPolicy`, `TermsOfService`, `AcceptableUsePolicy`, `CookiePolicy` | `/privacy`, `/terms`, `/acceptable-use`, `/cookies` |
+
+### `shared/components/`
+| Component | Description |
+| --- | --- |
+| `PublicHeader` (`public-header.tsx`) | `h-14` bar: `BrandMark`, GitHub icon, Sign in or dashboard |
+| `PublicFooter` (`public-footer.tsx`) | Legal and product links, cookie preferences, portfolio credit. Landing passes `pricingHref="#pricing"` |
+| `GitHubRepoLink` (`github-repo-link.tsx`) | Ghost icon button to the SourceLab repository. New tab, `noopener noreferrer`. This lucide build has no GitHub brand icon, so the mark is an inline svg |
 
 ### `features/landing/components/`
 | Component | Description |
@@ -184,7 +204,7 @@ Hook: `useSignOut` (`hooks/use-sign-out.ts`). `app/(auth)/layout.tsx` is a split
 | `LandingNav` (`landing-nav.tsx`) | Fixed bar with scroll blur, `BrandMark`, section links, mobile `Sheet`, Sign in / Create a notebook |
 | `LandingHero` (`landing-hero.tsx`) | Title, lede, actions, and the `CitedAnswerPreview` |
 | `LandingFeatures`, `LandingStudy`, `LandingUseCases`, `LandingHowItWorks` | Content bands |
-| `LandingFooter`, `LandingSectionHeader` | Footer and the centred section heading |
+| `LandingFooter`, `LandingSectionHeader` | Footer delegates to `PublicFooter` (`pricingHref="#pricing"`). `LandingSectionHeader` is the centred section heading |
 
 ---
 
@@ -295,6 +315,60 @@ Last updated: 2026-10-03
 | Accent usage | `bg-primary` on the 2px indicator (`h-0.5`) |
 
 **Pattern notes:** One app-wide bar, mounted in the root layout. It runs only while the pathname is changing (links, `useAppRouter` push/replace, back/forward). Same-pathname updates, skeletons, button `Spinner`s, and toasts stay as they are. Do not reuse `components/ui/progress.tsx` for this; that primitive is a labeled, value-based control. The bar waits 150ms before it appears so a fast navigation does not flash.
+
+### Cookie banner
+
+File: `client/features/consent/components/cookie-consent.tsx`
+Last updated: 2026-10-16
+
+| Property | Class |
+| --- | --- |
+| Background | `bg-card` (solid, not blurred) |
+| Border | `border border-border` |
+| Border radius | `rounded-2xl`; preference rows `rounded-xl` |
+| Text | title `font-heading text-sm font-semibold tracking-tight`; body `text-sm text-muted-foreground` |
+| Spacing | `p-5`; actions `gap-2` |
+| Hover state | preference row `hover:border-primary/40` |
+| Shadow | `shadow-2xl` |
+| Accent usage | 0.5px `bg-primary/50` top stripe; icon badge `bg-primary/10 text-primary-ink`; primary button |
+
+**Pattern notes:** Floating card centered at the bottom (max-w-xl), not a full-width bar. An amber stripe at the very top of the card marks it as the amber-branded product. A cookie icon in an amber badge tile sits left of the title for quick recognition. Button order (left-to-right): Customize → Reject non-essential → Accept all. On `/` only, the card and dialog add `dark` so they match the landing page. Necessary is a disabled checked `Checkbox` in the preferences dialog.
+
+### Public footer
+
+File: `client/shared/components/public-footer.tsx`
+Last updated: 2026-10-16
+
+| Property | Class |
+| --- | --- |
+| Background | none (page background); bottom bar inherits page bg |
+| Border | `border-t border-border`; bottom bar `border-t border-border` |
+| Border radius | links `rounded-md` |
+| Text | tagline `text-sm leading-relaxed text-muted-foreground`; links `text-sm text-muted-foreground hover:text-foreground`; column labels `text-xs font-semibold text-foreground/40` |
+| Spacing | main grid `px-6 py-14 md:py-16`; link column gap `gap-2.5`; bottom bar `px-6 py-4` |
+| Hover state | links `hover:text-foreground`; icon links `hover:text-foreground`; "Harsh" credit `hover:text-primary-ink hover:underline` |
+| Shadow | none |
+| Accent usage | none in the footer grid; `text-primary-ink` on the portfolio hover only |
+
+**Pattern notes:** Four-column grid (`2fr 1fr 1fr 1fr`) on desktop; two-column stacking on mobile with the brand column spanning full width. Brand column: `BrandMark`, tagline, GitHub icon + portfolio globe icon. Three link columns: Product, Legal, More. Bottom bar: copyright left, "Created by Harsh → iamharsh.in" right. Column labels are sentence-case, not all-caps. Social icons are inline SVGs (GitHub mark, globe for the portfolio). Cookie preferences reopens the `CookieConsent` dialog from the More column.
+
+### Legal page
+
+File: `client/features/legal/components/legal-document.tsx`
+Last updated: 2026-10-16
+
+| Property | Class |
+| --- | --- |
+| Background | `bg-background` |
+| Border | header `border-b border-border`; none on the article |
+| Border radius | placeholders `rounded-md` |
+| Text | `h1` `font-heading text-3xl font-bold tracking-tight`; sections `h2` `font-heading text-base font-semibold`; body paragraphs `text-muted-foreground`; list items `text-muted-foreground leading-relaxed` |
+| Spacing | article `max-w-2xl px-4 py-14 md:px-8 md:py-20`; header `pb-8`; sections `space-y-10` |
+| Hover state | inline links `underline underline-offset-4 hover:text-primary-ink` |
+| Shadow | none |
+| Accent usage | none beyond link hover |
+
+**Pattern notes:** Max-width `2xl` (not `3xl`) for better line lengths. Header section has a bottom border separating the title block from the body. Paragraphs and list items use `text-muted-foreground`; section headings use `text-foreground`. Body links use `text-foreground underline underline-offset-4` with amber hover. Unpublished facts use `LegalPlaceholder` (`bg-muted font-mono text-xs`), not invented details.
 
 ---
 

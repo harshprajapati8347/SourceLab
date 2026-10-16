@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/sheet";
 import { authRoutes } from "@/features/auth/lib/auth-routes";
 import { BrandMark } from "@/shared/components/brand-mark";
+import { GitHubRepoLink } from "@/shared/components/github-repo-link";
+import { site } from "@/shared/lib/site";
 import { cn } from "@/lib/utils";
 
 const NAV_LINKS = [
@@ -67,6 +69,9 @@ export function LandingNav() {
         </nav>
 
         <div className="flex items-center justify-end gap-1.5 justify-self-end sm:gap-2">
+          <div className="hidden min-[900px]:block">
+            <GitHubRepoLink />
+          </div>
           <Sheet>
             <SheetTrigger
               render={
@@ -94,6 +99,18 @@ export function LandingNav() {
                     {link.label}
                   </SheetClose>
                 ))}
+                <SheetClose
+                  render={
+                    <a
+                      href={site.github}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={linkClassName}
+                    />
+                  }
+                >
+                  GitHub
+                </SheetClose>
                 <SheetClose
                   render={
                     <Link href={authRoutes.login} className={linkClassName} />

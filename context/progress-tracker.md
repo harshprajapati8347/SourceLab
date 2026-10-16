@@ -6,9 +6,9 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 
 ## Current Status
 
-**Phase:** Auth (Google + email/password), workspaces, sources/RAG, chat with query and context intelligence, learning artifacts, memory, billing (Stripe Pro) + credits.
-**Last completed:** User memory and notebook memory. User memory is recalled in every notebook; notebook memory stays in the workspace where it was saved or learned.
-**Next:** Operator setup — Resend domain, Stripe test Product/Price (`STRIPE_PRO_PRICE_ID`), webhook to Express `/api/auth/stripe/webhook`. See `context/billing-and-credits.md`.
+**Phase:** Auth, workspaces, sources/RAG, chat, learning artifacts, memory, billing, and public-launch drafts (cookie consent, consent-gated Tag Manager, privacy, terms, acceptable use, cookies, public footer, GitHub link).
+**Last completed:** UI polish pass on pre-launch components — multi-column Vidyst-style footer (brand column + Product/Legal/More link columns + bottom bar with copyright), cookie consent banner redesigned as a floating card with amber accent stripe and icon badge, legal document layout improved (narrower max-width, header border, better type hierarchy), and branded 404/500 error pages with large typographic numerals.
+**Next:** Operator setup — production domain, support email, lawyer review of the legal drafts, Tag Manager consent settings, Resend domain, Stripe Price (`STRIPE_PRO_PRICE_ID`), webhook to Express `/api/auth/stripe/webhook`. See `context/billing-and-credits.md`.
 
 ---
 
@@ -86,6 +86,10 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 - [x] Dark mode (`next-themes`)
 - [x] Consistent empty/loading/error state patterns across features
 - [x] Signed-out landing page at `/` (always dark, pricing embedded). Signed-in visitors still redirect to `/dashboard`.
+- [x] Public footer on the landing page, pricing, auth, and legal pages. “Created by Harsh” links to the portfolio. GitHub is in the landing nav (desktop and mobile menu) and on the public header.
+- [x] Cookie banner with Accept all, Reject non-essential, and Customize. Necessary storage stays on. Analytics is off until allowed, and the choice lasts until it is changed. Tag Manager is not inserted before that grant.
+- [x] Public drafts: `/privacy`, `/terms`, `/acceptable-use`, `/cookies`. They describe the product and mark unpublished identity, contact, and retention details. They are not a legal review.
+- [x] Branded not-found and route error pages.
 - [x] Revamped identity from `docs/frontend-design/`: oklch near-black ramp + one amber accent (`primary`, `primary-ink` for text), Manrope + JetBrains Mono (data only), 10px radius base, `ease-house` motion, reduced-motion support, light and dark themes
 - [x] Workspace shell mounted once by `workspace/[id]/layout.tsx`: recessed sidebar (nav + searchable notebook list), translucent header, right-hand sources panel (sheet on mobile)
 - [x] Mobile workspace header includes a Home icon linking to `/` (hidden from the `md` breakpoint up)

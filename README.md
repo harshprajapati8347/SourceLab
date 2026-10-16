@@ -141,7 +141,7 @@ There is no root `package.json`. Install `client/` and `server/` separately. The
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/<your-org>/SourceLab.git
+git clone https://github.com/harshprajapati8347/SourceLab.git
 cd SourceLab
 
 cd server && pnpm install && cd ..
@@ -196,8 +196,9 @@ Configure the Google OAuth client’s authorized redirect URI to Better Auth’s
 | --- | --- | --- |
 | `API_URL` | `http://localhost:8080` | Next rewrites + server-side workspace fetches |
 | `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` | Session fetch origin |
+| `NEXT_PUBLIC_GTM_ID` | empty | Google Tag Manager container. Empty means the container script is never added |
 
-Create `client/.env` only if you need to override those.
+Copy [`client/.env.example`](client/.env.example) to `client/.env.local` when you need to override those. An earlier layout hardcoded container `GTM-MXJ535NT`. Put that value in `NEXT_PUBLIC_GTM_ID` only if it is the container you mean to use.
 
 ### 4. Migrate the database
 
@@ -238,6 +239,10 @@ Open [http://localhost:3000](http://localhost:3000). API health: [http://localho
 | `/` | Signed-out landing (always dark). Signed-in visitors redirect to `/dashboard` |
 | `/login`, `/signup`, `/forgot-password`, `/reset-password` | Auth |
 | `/pricing` | Public Free vs Pro |
+| `/privacy` | Privacy policy draft (not a lawyer-reviewed policy) |
+| `/terms` | Terms of service, including credits, cancellation, and AI limits |
+| `/acceptable-use` | What not to submit or do |
+| `/cookies` | Necessary storage, Analytics consent, and a way to change the choice |
 | `/dashboard` | Notebook list — search, create, edit, delete |
 | `/settings/memory` | User memory. `?workspaceId=` is that notebook’s memory. `?source=manual` or `?source=learned` filters either list |
 | `/settings/billing` | Plan, credits, Upgrade to Pro, Manage billing |
@@ -316,12 +321,32 @@ Also:
 - Production start runs `prisma migrate deploy` then `node dist/index.js`.
 - Point Stripe at the Express origin: `POST /api/auth/stripe/webhook`. Required events are listed in [`context/billing-and-credits.md`](context/billing-and-credits.md).
 - Bootstrap for a small EC2 host: [`deploy/ec2-bootstrap.sh`](deploy/ec2-bootstrap.sh).
+- The Next.js app has no hosting config in this repo. Set `API_URL`, `NEXT_PUBLIC_APP_URL`, `CLIENT_URL`, and `BETTER_AUTH_URL` to the public origins before a launch.
+- There is no self-serve account deletion. Deleting a source does not delete the Cloudinary file. Deleting a notebook does not delete user memory.
+
+### Google Tag Manager
+
+The app does not load Tag Manager until both of these are true: `NEXT_PUBLIC_GTM_ID` is a `GTM-…` id, and the visitor has allowed Analytics. Advertising consent stays denied. There is no marketing category and no `<noscript>` container iframe.
+
+On each page load, before any container script, the app pushes Google Consent Mode v2 `default` (`analytics_storage` granted only when a stored choice allows it) and a `consent_default` dataLayer event. A visitor action then pushes `gtag('consent','update')`, `consent_update`, and `cookie_consent_choice`. Those events carry `consent_analytics`, `consent_marketing` (`denied`), and `consent_necessary` (`granted`). They do not include an email or user id.
+
+The choice stays in `localStorage` (`sourcelab-consent`) until the visitor changes it.
+
+In the Tag Manager container (this is not done by the app):
+
+1. Add a Consent Initialization tag that uses the Consent Mode defaults above, and make sure it is not a second copy of the container snippet.
+2. Set Google tags to require `analytics_storage`. Do not fire them on All Pages without that check.
+3. Keep ad tags off. This app always sends `ad_storage`, `ad_user_data`, and `ad_personalization` as denied.
+4. Optional triggers can listen for `cookie_consent_choice` or `consent_update`. Do not treat a custom event as a substitute for Consent Mode.
+5. Put the GA4 measurement id on the GA4 tag in Tag Manager. It is not stored in this repo.
+
+A cookie banner does not make the product legally compliant. The privacy, terms, acceptable use, and cookie pages are product descriptions with placeholders. Have a lawyer review them before a public launch.
 
 ## Current progress
 
-**Phase:** Auth (Google + email/password), workspaces, sources/RAG, chat with query and context intelligence, learning artifacts, memory, billing (Stripe Pro) + credits.
+**Phase:** Public-launch drafts are in the client: cookie consent, consent-gated Tag Manager, privacy, terms, acceptable use, cookies, a public footer, and a GitHub link. Accounts, notebooks, sources, RAG chat, learning tools, memory, and Stripe credits were already implemented.
 
-**Operator setup still needed for a live billing/email stack:** Resend domain, Stripe test Product/Price (`STRIPE_PRO_PRICE_ID`), webhook to Express `/api/auth/stripe/webhook`.
+**Still unresolved before a public launch:** a production domain and Next.js host; a published support email (there is no contact page); legal review and the bracketed identity, address, governing law, and retention placeholders; the Tag Manager container’s own consent settings and GA4 id; Resend domain; Stripe Price id and webhook; self-serve account deletion; Cloudinary files left behind after source delete.
 
 Details: [`context/build-plan.md`](context/build-plan.md), [`context/progress-tracker.md`](context/progress-tracker.md), [`context/billing-and-credits.md`](context/billing-and-credits.md).
 

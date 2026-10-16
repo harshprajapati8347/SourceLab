@@ -22,7 +22,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { authClient } from "@/features/auth/lib/auth-client";
 import { authRoutes } from "@/features/auth/lib/auth-routes";
 import { useSession } from "@/features/auth/hooks/use-session";
-import { BrandMark } from "@/shared/components/brand-mark";
+import { PublicFooter } from "@/shared/components/public-footer";
+import { PublicHeader } from "@/shared/components/public-header";
 import { getErrorMessage } from "@/shared/lib/api";
 import { usePricingPlans } from "../hooks/use-billing";
 import { formatPlanPrice } from "../lib/constants";
@@ -175,31 +176,10 @@ export function PricingPage({ embedded = false }: PricingPageProps) {
   }
 
   return (
-    <div className="min-h-svh bg-background">
-      <header className="border-b">
-        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4 md:px-8">
-          <Link
-            href={authRoutes.home}
-            aria-label="SourceLab home"
-            className="rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
-          >
-            <BrandMark />
-          </Link>
-          <Button
-            nativeButton={false}
-            variant="outline"
-            size="sm"
-            render={
-              <Link
-                href={session?.user ? authRoutes.dashboard : authRoutes.login}
-              />
-            }
-          >
-            {session?.user ? "Go to dashboard" : "Sign in"}
-          </Button>
-        </div>
-      </header>
-      {content}
+    <div className="flex min-h-svh flex-col bg-background">
+      <PublicHeader />
+      <div className="flex-1">{content}</div>
+      <PublicFooter />
     </div>
   );
 }
