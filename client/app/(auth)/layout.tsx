@@ -10,7 +10,7 @@ export default function AuthLayout({
 }) {
   return (
     <div className="flex flex-col">
-      <div className="grid min-h-screen flex-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+      <div className="grid h-full min-h-svh flex-1 sm:min-h-screen lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
         <aside className="dark relative hidden flex-col justify-between gap-10 overflow-hidden border-r bg-sidebar p-10 text-foreground lg:flex">
           <Link
             href="/"
