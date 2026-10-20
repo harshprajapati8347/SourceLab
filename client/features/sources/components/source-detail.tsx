@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
@@ -8,7 +8,9 @@ import { ArrowLeftIcon, ExternalLinkIcon, RefreshCwIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
-import { ApiError } from "@/shared/lib/api";
+import { toast } from "@/components/ui/toast";
+import { ApiError, getErrorMessage } from "@/shared/lib/api";
+import { getSourcePdfUrl } from "../lib/api";
 import { useReprocessSource, useSource, useSourceChunks } from "../hooks/use-sources";
 import type { SourceChunk } from "../lib/types";
 import { SOURCE_TYPE_LABELS } from "../lib/constants";
@@ -41,6 +43,7 @@ export function SourceDetail({ workspaceId, sourceId }: SourceDetailProps) {
     ? (chunks.data?.chunks.find((chunk) => chunk.id === chunkId) ?? null)
     : null;
   const reprocess = useReprocessSource(workspaceId);
+  const [openingPdf, setOpeningPdf] = useState(false);
 
   useEffect(() => {
     if (!focus) {
@@ -100,8 +103,33 @@ export function SourceDetail({ workspaceId, sourceId }: SourceDetailProps) {
   }
 
   const metadata = source.metadata ?? {};
-  const fileUrl =
-    typeof metadata.fileUrl === "string" ? metadata.fileUrl : null;
+  const hasPdf =
+    source.type === "PDF" &&
+    (typeof metadata.publicId === "string" ||
+      typeof metadata.fileUrl === "string");
+
+  async function openPdf() {
+    setOpeningPdf(true);
+    try {
+      const { url } = await getSourcePdfUrl(workspaceId, sourceId);
+      const opened = window.open(url, "_blank", "noopener,noreferrer");
+      if (!opened) {
+        toast.add({
+          title: "Could not open PDF",
+          description: "Allow pop-ups for this site, then try again.",
+          type: "error",
+        });
+      }
+    } catch (openError) {
+      toast.add({
+        title: "Could not open PDF",
+        description: getErrorMessage(openError, "Try again."),
+        type: "error",
+      });
+    } finally {
+      setOpeningPdf(false);
+    }
+  }
   const fileName =
     typeof metadata.fileName === "string" ? metadata.fileName : null;
   const chunkCount =
@@ -177,7 +205,7 @@ export function SourceDetail({ workspaceId, sourceId }: SourceDetailProps) {
         </a>
       ) : null}
 
-      {source.type === "PDF" && fileUrl ? (
+      {hasPdf ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4 text-sm">
           <div className="min-w-0">
             <p className="font-medium">PDF uploaded</p>
@@ -186,12 +214,12 @@ export function SourceDetail({ workspaceId, sourceId }: SourceDetailProps) {
             ) : null}
           </div>
           <Button
-            nativeButton={false}
             variant="outline"
             size="sm"
-            render={<a href={fileUrl} target="_blank" rel="noreferrer" />}
+            disabled={openingPdf}
+            onClick={() => void openPdf()}
           >
-            <ExternalLinkIcon />
+            {openingPdf ? <Spinner /> : <ExternalLinkIcon />}
             Open PDF
           </Button>
         </div>

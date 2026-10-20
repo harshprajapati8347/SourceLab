@@ -3,6 +3,7 @@ import {
   createTextOrMarkdownSource,
   bulkDeleteSourcesForWorkspace,
   deleteSourceForWorkspace,
+  getPdfDeliveryUrlForWorkspace,
   getSourceChunksForWorkspace,
   getSourceForWorkspace,
   importWebSearchSource,
@@ -45,6 +46,16 @@ export async function getSource(req: Request, res: Response) {
     req.session.user.id,
   );
   res.json(source);
+}
+
+export async function getSourcePdf(req: Request, res: Response) {
+  const { workspaceId, sourceId } = sourceIdParamSchema.parse(req.params);
+  const result = await getPdfDeliveryUrlForWorkspace(
+    workspaceId,
+    sourceId,
+    req.session.user.id,
+  );
+  res.json(result);
 }
 
 export async function getSourceChunks(req: Request, res: Response) {

@@ -134,6 +134,37 @@ export function updateSourceRecord(
   });
 }
 
+export function findSourceAssetRows(workspaceId: string) {
+  return prisma.source.findMany({
+    where: { workspaceId },
+    select: { id: true, metadata: true },
+  });
+}
+
+/**
+ * Counts sources outside an exclusion set that store the same Cloudinary public id.
+ *
+ * @param publicId - Stored Cloudinary public id
+ * @param excludeSourceIds - Sources already being deleted
+ * @returns How many remaining sources reference this file
+ */
+export function countSourcesWithPublicId(
+  publicId: string,
+  excludeSourceIds: string[],
+) {
+  return prisma.source.count({
+    where: {
+      ...(excludeSourceIds.length > 0
+        ? { id: { notIn: excludeSourceIds } }
+        : {}),
+      metadata: {
+        path: ["publicId"],
+        equals: publicId,
+      },
+    },
+  });
+}
+
 export async function deleteSourceRecord(sourceId: string) {
   await prisma.source.delete({
     where: { id: sourceId },

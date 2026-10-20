@@ -145,9 +145,10 @@ return result.output;
 
 ### Cloudinary (`cloudinary`)
 
-- Upload uses an **unsigned preset** (`CLOUDINARY_UPLOAD_PRESET`) via raw `fetch` to `https://api.cloudinary.com/v1_1/{cloud_name}/raw/upload` with a `FormData` body — not the `cloudinary` SDK's own upload helper.
-- The `cloudinary` SDK (`v2`) is used only for generating **signed download URLs** as a 401 fallback (`getSignedCloudinaryDownloadUrl`), which requires `CLOUDINARY_API_KEY`/`CLOUDINARY_API_SECRET` in addition to the cloud name.
-- PDFs are uploaded to the `sourcelab/pdfs` folder; `resourceType` is tracked per source (`"raw" | "image"`) since Cloudinary sometimes classifies PDFs as `image` resources.
+- Upload uses an **unsigned preset** (`CLOUDINARY_UPLOAD_PRESET`) via raw `fetch` to `https://api.cloudinary.com/v1_1/{cloud_name}/raw/upload` with a `FormData` body — not the `cloudinary` SDK's own upload helper. The preset can override the `folder` field. Persist `public_id` and `resource_type` from the response; do not rebuild them from the URL.
+- Public CDN links whose path ends in `.pdf` return **401** `deny or ACL failure` on this cloud, including signed CDN URLs. **Open PDF** and PDF re-extraction use `cloudinary.utils.private_download_url` (`getPdfDeliveryUrl`) with the stored public id and resource type. Raw ids that already end in `.pdf` omit the format argument. The link expires in 15 minutes and is minted when the user opens the file (`GET .../sources/:sourceId/file`).
+- The SDK's signed CDN URL (`getSignedCloudinaryDownloadUrl`) remains a last-resort fallback for extraction. It needs `CLOUDINARY_API_KEY` and `CLOUDINARY_API_SECRET`.
+- `resourceType` is stored per source (`"raw" | "image"`). Deletes call `uploader.destroy` with that pair. `"not found"` is success. A public id still referenced by another source is not destroyed. Three failures abort the source or notebook delete so the row can be retried.
 
 ### Firecrawl (`@mendable/firecrawl-js`)
 
@@ -156,7 +157,7 @@ return result.output;
 ### `youtube-transcript`
 
 - Video id is extracted from the URL with a regex covering `watch?v=`, `youtu.be/`, `/embed/`, and `/shorts/` forms.
-- `YoutubeTranscript.fetchTranscript(videoId)` returns caption segments; they're joined with spaces into one `content` string. Any failure (no captions, private video, etc.) is normalized to a single user-facing `ValidationError`.
+- `YoutubeTranscript.fetchTranscript(videoId)` returns caption segments; they're joined with spaces into one `content` string. Any failure (no captions, private video, etc.) is normalized to a single user-facing `ValidationError`. The extract step then cleans that transcript (paragraphs, entities, repeated lines) before chunking.
 
 ### Tavily (`@tavily/core`)
 
@@ -167,7 +168,7 @@ return result.output;
 ### `unpdf`
 
 - `getDocumentProxy(new Uint8Array(arrayBuffer))` + `extractText(pdf, { mergePages: false })` → per-page text array + `totalPages`. Used for both freshly uploaded PDFs and re-processing PDFs re-downloaded from Cloudinary.
-- Per-page text is preserved specifically so chunks can carry a `page` number in their metadata (`chunkPages`) — don't flatten to a single string before chunking if page numbers matter.
+- Per-page text is preserved specifically so chunks can carry a `page` number in their metadata (`chunkPages`) — don't flatten to a single string before chunking if page numbers matter. When pages are present, each page is cleaned before `chunkPages`.
 
 ### `multer`
 

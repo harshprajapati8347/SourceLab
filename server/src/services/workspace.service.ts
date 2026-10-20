@@ -4,7 +4,9 @@ import {
   updateWorkspaceRecord,
   type WorkspaceRecord,
 } from "../repositories/workspace.repository.js";
+import { findSourceAssetRows } from "../repositories/source.repository.js";
 import { deleteWorkspaceVectors } from "../lib/pinecone.js";
+import { cleanupCloudinaryAssets } from "./cloudinary-cleanup.service.js";
 import { deleteMemoriesForWorkspace } from "./memory.service.js";
 import { NotFoundError } from "../types/app-error.js";
 import type { UpdateWorkspaceInput } from "../validators/workspace.validator.js";
@@ -52,8 +54,10 @@ export async function updateWorkspaceForUser(
 }
 
 /**
- * Deletes a workspace, its Pinecone namespace, and its notebook memories.
+ * Deletes a workspace, its Cloudinary files, its Pinecone namespace, and its notebook memories.
  *
+ * Cloudinary cleanup runs first and uses each source's stored public id. It throws
+ * if a delete keeps failing, so the notebook row stays and the delete can be retried.
  * Pinecone and Mem0 cleanup are best-effort: deletion continues if either fails.
  *
  * @param workspaceId - Workspace to delete
@@ -67,6 +71,9 @@ export async function deleteWorkspaceForUser(
   userId: string,
 ) {
   await getWorkspaceByIdForUser(workspaceId, userId);
+
+  const sources = await findSourceAssetRows(workspaceId);
+  await cleanupCloudinaryAssets(sources);
 
   try {
     await deleteWorkspaceVectors(workspaceId);

@@ -7,7 +7,7 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 ## Current Status
 
 **Phase:** Auth, workspaces, sources/RAG, chat, learning artifacts, memory, billing, and public-launch drafts (cookie consent, consent-gated Tag Manager, privacy, terms, acceptable use, cookies, public footer, GitHub link).
-**Last completed:** Chat replies are repaired for consistent Markdown before they are shown, and a retrieval that does not contain enough of the question asks for web-search consent instead of searching from a score.
+**Last completed:** PDF, website, and YouTube text is cleaned before chunking. Open PDF uses a short-lived Cloudinary download, and deleting a source or notebook deletes its stored Cloudinary file.
 **Next:** Operator setup — production domain, support email, lawyer review of the legal drafts, Tag Manager consent settings, Resend domain, Stripe Price (`STRIPE_PRO_PRICE_ID`), webhook to Express `/api/auth/stripe/webhook`. See `context/billing-and-credits.md`.
 
 ---
@@ -15,6 +15,7 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 ## Implemented
 
 ### Auth
+
 - [x] Google OAuth via Better Auth (server-mounted at `/api/auth/*`, Prisma adapter)
 - [x] Email + password sign-up/sign-in (verification required; Resend, console fallback)
 - [x] Password reset (request + reset pages)
@@ -22,6 +23,7 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 - [x] Sign-in / sign-out UI
 
 ### Billing and credits
+
 - [x] Better Auth Stripe plugin — single Pro plan (`STRIPE_PRO_PRICE_ID`), `createCustomerOnSignUp`
 - [x] `/pricing` and `/settings/billing` (checkout + billing portal)
 - [x] `User.credits` / `User.plan` with Inngest lifecycle from Stripe webhooks
@@ -29,26 +31,33 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 - [x] Credits badge in dashboard, workspace header, chat composer, and generate-artifact dialog
 
 ### Workspaces
+
 - [x] Create / list / search (debounced, client-side) / update / delete
 - [x] Delete cascades to sources, conversations, artifacts (Prisma cascade) and best-effort deletes the Pinecone namespace
 - [x] Per-workspace settings: title, description, icon, default chat model
 - [x] Dashboard grid UI with empty/loading/error states
 
 ### App chrome
+
 - [x] Global top progress bar while a client navigation changes the pathname. Same-pathname updates (including chat stripping `?ask=`) do not start it
 - [x] Below `md`, a same-tab link in the left sidebar or sources sheet closes both mobile sheets. The desktop sidebar and persisted sources panel stay as they were
 - [x] Memory menu in the top bar on the dashboard and inside a notebook. It opens all memories, memories you added, and memories learned from chat
 
 ### Sources
+
 - [x] Five ingestion types: Text, Markdown, PDF upload (Cloudinary), Website (Firecrawl), YouTube (transcript)
 - [x] Additional web-search-to-source import endpoint (`/import/web-search`)
 - [x] Background processing pipeline (Inngest): extract → chunk → embed → index, with status tracking (`PENDING → PROCESSING → READY/FAILED`)
 - [x] Reprocess a single failed source, or bulk-reprocess all failed sources
 - [x] Source library: search, type filter, status filter, grid/list view toggle, multi-select bulk delete. The grid is one column below `sm`, and cards stay within that column.
 - [x] Source detail page with extracted content preview, chunk count, processing/failed states
+- [x] PDF, website, and YouTube text is normalized after extraction and before chunking. Pasted text and Markdown are left as written. Cleanup does not add words
+- [x] Open PDF requests a short-lived download URL from the stored Cloudinary public id. The public CDN link for these PDFs returns 401
+- [x] Deleting a source, or a notebook, deletes Cloudinary files that no other source still uses. A failed delete is retried and then leaves the row in place
 - [x] Live polling (3s) while a source is pending/processing
 
 ### Chat (RAG)
+
 - [x] Multi-conversation per workspace, streamed responses (AI SDK)
 - [x] RAG retrieval from Pinecone (per-workspace namespace, score-thresholded top-K)
 - [x] Inline numbered citations with hover previews. Workspace citations open the cited passage (`?chunk=`), including the PDF page. Web citations open the external URL
@@ -70,18 +79,21 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 - [x] Output guardrails after generation: grounding and citation checks against retrieved chunks and web snippets, then the local output guards. A paraphrase is kept when its content words are in the cited passage. A missing citation, an email, phone, number, or name the passage does not contain, or a paraphrase the passage does not state, is removed. A partial answer says the remaining part is not established. The canned refusal is used only when the reply cites nothing retrieved. The local guards then normalize text, strip control characters, and can replace the reply for length, emptiness, citation shape, sensitive data, prompt leakage, chain-of-thought, a numeric citation outside the workspace chunk list, or unsafe HTML. Unsafe markdown links are rewritten in place. The draft is not sent. Coverage is a pipeline step when the trace is enabled.
 
 ### Learning Artifacts ("Learn")
+
 - [x] Six types: Summary, Takeaways, Flashcards, Quiz, Mind Map, Report
 - [x] Background generation (Inngest) over all/selected READY sources
 - [x] Per-type structured schema (Zod) and dedicated viewer, including an interactive `@xyflow/react` mind map with auto-layout, collapse/expand, and minimap
 - [x] Artifact list with status/type badges, delete
 
 ### Memory
+
 - [x] User memory via Mem0, recalled in every notebook (manual create/edit/delete on `/settings/memory`)
 - [x] Notebook memory via Mem0, isolated to one workspace. Chat learning is stored here. `?workspaceId=` lists and edits it. Deleting a notebook deletes these memories
 - [x] Existing rows with no scope are stamped once: a conversation that still belongs to the user becomes notebook memory; every other row becomes user memory
 - [x] Memory settings page with source/category badges. The top-bar menu can show only memories you added (`?source=manual`) or only ones learned from chat (`?source=learned`), in either scope. Inside a notebook the menu also links to that notebook's memory
 
 ### UI / Design System
+
 - [x] Tailwind v4 token system (`@theme inline`, oklch colors, radius scale) — no `tailwind.config.ts`
 - [x] shadcn/ui component set on `@base-ui/react` primitives (not Radix)
 - [x] Dark mode (`next-themes`)
@@ -100,16 +112,13 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 - [x] Split sign-in layout with a brand panel; standalone `/pricing` header
 
 ### Deploy
+
 - [x] Production Dockerfile (`server/Dockerfile.prod`) — Prisma generate + `migrate deploy` on boot, Node heap cap
 - [x] `docker-compose.prod.yml` — pull pre-built Docker Hub image, 360 MB memory limit, healthcheck (no Postgres on the app host)
 - [x] GitHub Actions (`.github/workflows/deploy-server.yml`) — build/push on `main`, SCP compose file, SSH pull + recreate
 - [x] EC2 bootstrap + production env template under `deploy/`
 
 ---
-
-## In Progress / Partial
-
-- **Analytics/dashboard charts** — `recharts` and a `chart.tsx` primitive are installed and present, but no feature currently renders a chart. Unclear if this is planned or dead weight (see `build-plan.md`).
 
 ## Not Started
 
@@ -130,14 +139,14 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 
 ## Decisions Made During Build
 
-- **Orphan cleanup kept `client/lib/utils.ts`** — it is the live `cn()` helper imported by shadcn primitives and feature components; `client/app/(auth)/layout.tsx` is also live (login page wrapper), not a duplicate.
+- **Orphan cleanup kept** `client/lib/utils.ts` — it is the live `cn()` helper imported by shadcn primitives and feature components; `client/app/(auth)/layout.tsx` is also live (login page wrapper), not a duplicate.
 - **Tavily and Mem0 remain optional env vars** — documented in `server/.env.example` with comments that missing keys degrade those features to no-ops rather than failing startup.
 - **512 MB EC2 host runs only the API container** — Postgres is managed (Neon/Supabase/RDS); images are built on GitHub Actions and pulled from Docker Hub; a 1 GB swap file is required.
-- **Credits are `Decimal(12, 1)` on `User`** — chat costs 0.1; artifacts and processed sources cost 1. No ledger table.
+- **Credits are** `Decimal(12, 1)` **on** `User` — chat costs 0.1; artifacts and processed sources cost 1. No ledger table.
 - **Pro is ₹499/month INR, 500 credits per period** — Free is 10 credits one-time. Both tiers have the same product surface; usage is gated on credits, not `plan === "pro"`.
 - **Pro cancellation stays Pro until Stripe deletes the subscription** — `User.plan` flips to `free` only then; leftover credits are kept.
-- **Stripe webhooks must hit Express `:8080` (or the API host)** — not the Next.js rewrite — so signature verification sees the raw body.
-- **Chat input guardrails sit in front of `streamText`** — `InputGuardService` checks the latest user message only. A block returns JSON 400 and does not create a conversation, charge credits, or start the AI SDK stream. PII that `PiiDetector` matches is rejected, along with the other enabled input guards. The banner does not repeat the query or the detected value. Sanitized text is what retrieval and the model see. The saved user message stays original.
+- **Stripe webhooks must hit Express** `:8080` **(or the API host)** — not the Next.js rewrite — so signature verification sees the raw body.
+- **Chat input guardrails sit in front of** `streamText` — `InputGuardService` checks the latest user message only. A block returns JSON 400 and does not create a conversation, charge credits, or start the AI SDK stream. PII that `PiiDetector` matches is rejected, along with the other enabled input guards. The banner does not repeat the query or the detected value. Sanitized text is what retrieval and the model see. The saved user message stays original.
 - **Output guardrails run after generation and before the reply is sent** — the model stream stays on the server. A grounding check removes a sentence when its citation is missing, when the cited passage does not contain the claimed email, phone, number, or a name later in the sentence, or when the judge marks the sentence unsupported and the passage does not share its content words. A paraphrase whose content words are in the cited passage is kept. A partial answer adds one sentence that the remaining part is not established. The first word of a sentence is not treated as a name. The canned refusal is used only when the reply cites nothing retrieved. After that, the local output guards can replace the whole reply or release a sanitized one. Numeric `[n]` citations are checked against the workspace chunk list. `[W#]` is left to grounding. The draft is not sent. A generated PII value, including an http(s) URL, replaces the reply even when a source contained it. Coverage is a pipeline step. The extra judge call stays inside the 0.1 credit. Learning artifacts are unchanged. Retrieval rewrites may search for a missing field, and they do not instruct the search to infer it. Grounding does not enable web search.
 - **Overview questions sample each ready source** — a summarization query takes the opening chunk of each READY source, then more passages until the character budget, merged with semantic hits. The similarity gate does not start a second search for that class.
 - **Web markers are one list** — prefetched results and later `web_search` calls append by URL. A later search continues `[W#]` numbering instead of starting again at `[W1]`. A marker is kept only when that page supports the sentence. Results without an http(s) URL are not numbered.
@@ -145,15 +154,16 @@ Snapshot of what's actually implemented in the codebase today, based on reading 
 - **Query and context intelligence is chat-only and stays inside the 0.1 credit** — classification, HyDE, and the coverage judgement use `gpt-4o-mini`. A standalone simple question skips HyDE. Authority comes from source type unless `metadata.authority` is already set. Contradiction is shown to the model. The five-way average is informational; one corrective pass runs for low coverage or low similarity, then stops. Prompt order is similarity, then authority, then freshness. Learning artifacts are unchanged. Each step is printed as `[rag]` console lines and stored on `Message.trace` for the chat pipeline panel.
 - **A question the sources do not cover gets a next step** — sufficiency is whether the passages contain enough of the question, not the coverage or similarity score and not a draft sentence that says something is missing. The reply says the available sources are not sufficient, names the gap, and asks whether to research it on the web. A short yes, including the "Yes, search the web" chip, runs that search even if the toggle is off. The toggle alone does not start a search. Sending the same topic again runs it only when the toggle is on. A later question does not reuse that yes. The latest reply also shows at most three short follow-up questions from the notebook or the current answer. They are stored on the message trace and still returned when the pipeline panel is hidden.
 - **Chat replies are repaired before display** — empty bullets, empty headings, repeated lines, dangling code fences, and unclosed emphasis are cleaned after the output guards. Citations that would be removed by that cleanup cause a fallback sentence instead. The repaired text is what gets streamed and stored.
-
+- **Extracted sources are cleaned before indexing** — PDF, website, and YouTube text is normalized in the extract step. The cleanup fixes lists, headings, tables, images, spacing, and repeated extraction chrome. It does not add wording. Text and Markdown sources are not rewritten.
+- **PDFs are opened and deleted by stored Cloudinary ids** — the public `.pdf` CDN URL returns 401. Open PDF mints a private download URL. Source and notebook deletion destroy that asset when no other source stores the same public id, and they keep the database row if Cloudinary keeps failing.
 - **Amber is a fill, not a text colour** — `text-primary-ink` carries amber text so light mode keeps AA contrast. The docs' hard-coded hex values, forced dark theme, Clerk, and ChaibookLM-only features (favorites, archive, admin logs, podcast, dashboard storage stats) were not copied.
 - **Chat is never gated by indexing** — the docs lock chat until every source is ready. SourceLab keeps the composer enabled and shows `SourceStatusBanner` instead, since the backend answers from whatever is already indexed.
 - **Memory is a top-bar menu** — `MemoryMenu` sits after credits on the dashboard and in the notebook header. The word is hidden below `sm` on the dashboard and below `md` in a notebook so the row does not overflow; the control stays named Memory. Account menu and the command palette still link to the same page. The source filter is a page `searchParams` prop, not a second fetch.
 - **Top progress bar is pathname navigation only** — a 2px `bg-primary` bar fixed to the viewport (`NavigationProgress`). It starts on `next/link`, `useAppRouter` push/replace, and back/forward, waits 150ms so fast navigations stay invisible, trickles until `usePathname()` changes, and gives up after 8s if the route never commits. Skeletons, spinners, toasts, polling, and chat streaming are not wired to it. `components/ui/progress.tsx` stays the unused form control.
 - **A notebook opens its latest chat** — reload, returning from Sources, and other navigation do not start a conversation. New Chat, or the first message when the notebook has no chats, is what creates one. At 10 stored messages (user and assistant) the composer stops, and the API rejects another turn before retrieval or a credit charge.
-- **Web search toggle reads `byWorkspace`** — selecting `getPrefs` does not re-render, because that function identity never changes. The first paint stays off until persistence hydrates, so the server HTML matches. The send body reads the same store when the message is sent. Cited web pages are streamed as `data-citations` with the reply, and each `[W#]` matches the merged result list.
+- **Web search toggle reads** `byWorkspace` — selecting `getPrefs` does not re-render, because that function identity never changes. The first paint stays off until persistence hydrates, so the server HTML matches. The send body reads the same store when the message is sent. Cited web pages are streamed as `data-citations` with the reply, and each `[W#]` matches the merged result list.
 - **Workspace pages share one shell via a layout** — `getSession` and `getWorkspaceOrNull` are wrapped in React `cache()` so the layout and page share one fetch. `WorkspaceShell` reads the workspace through `useWorkspace(id, initialData)` so renames show up without a server refetch.
-- **Removed dead code** — `client/components/auth`, `client/components/providers`, the duplicate `client/lib/auth-*`, `require-auth`, `unauth`, `client/hooks/use-mobile.ts`, `SignOutButton`, `ModeToggle`, `WorkspaceList`, workspace gradients, `SourceSidebarList`, and `carousel.tsx`.
+- **Removed dead code** — `client/components/auth`, `client/components/providers`, the duplicate `client/lib/auth-`*, `require-auth`, `unauth`, `client/hooks/use-mobile.ts`, `SignOutButton`, `ModeToggle`, `WorkspaceList`, workspace gradients, `SourceSidebarList`, and `carousel.tsx`.
 
 ## Notes
 

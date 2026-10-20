@@ -132,12 +132,12 @@ Hook: `useSignOut` (`hooks/use-sign-out.ts`). `app/(auth)/layout.tsx` is a split
 | --- | --- |
 | `SourceLibrary` (`source-library.tsx`) | Sources page: `PageHeader`, pill filters, grid/list toggle, select mode with bulk delete (confirmed), "Retry n failed". The grid is one column below `sm`, and cards stay within that column. |
 | `SourceCard` (`source-card.tsx`) | Source tile (grid or list `layout`): type tile, title (stretched link), preview, status badge, actions menu |
-| `SourceDetail` (`source-detail.tsx`) | Source page: status, link or PDF, processing/failed (with Try again)/empty states, Markdown preview |
+| `SourceDetail` (`source-detail.tsx`) | Source page: status, link or PDF, processing/failed (with Try again)/empty states, Markdown preview. Open PDF asks the API for a short-lived file URL |
 | `SourcesPanel` (`sources-panel.tsx`) | Compact `w-80` source list beside chat and learn (rows, indexing/failed state, add button, library link). A same-tab link click or Add below `md` closes this sheet and the left sidebar sheet |
 | `AddSourceDialog` (`add-source-dialog.tsx`) | Tabbed dialog (Text / Markdown / PDF / Website / YouTube). One `<form>` per tab so Enter submits; stays on the page and toasts with an "Open" action |
 | `SourceStatusBadge` (`source-status-badge.tsx`) | Status to icon + label: pending (clock), processing (spinner), ready (check, amber tint), failed (alert, destructive) |
 | `SourceTypeIcon` (`source-type-icon.tsx`) | Maps `SourceType` to a `lucide-react` icon |
-| `MarkdownPreview` (`markdown-preview.tsx`) | Renders a source's extracted text |
+| `MarkdownPreview` (`markdown-preview.tsx`) | Renders a source's extracted text. Images stay within the preview width |
 
 ### `features/chat/components/`
 | Component | Description |

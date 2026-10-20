@@ -146,6 +146,7 @@ inngest.send("source/created", { sourceId })
         ↓
 step: mark-processing        → status = PROCESSING
 step: extract-content        → read source.content, or download PDF from Cloudinary + unpdf extract
+                                 → PDF, website, and YouTube text is normalized before it is saved (text and markdown are not)
 step: chunk-content           → chunkText/chunkPages (recursive separator splitter, ~1000 chars, 100 overlap)
                                  → SourceChunk rows saved to Postgres
 step: embed-and-index         → OpenAI embeddings (batches of 50) → Pinecone upsert (workspace namespace, batches of 100)
@@ -264,7 +265,7 @@ Auth tables (`user`, `session`, `account`, `verification`, `subscription`) are o
 | content | String? | Extracted/raw text (null until processed for PDFs) |
 | url | String? | Original URL for WEBSITE/YOUTUBE sources |
 | status | enum `SourceStatus` | `PENDING \| PROCESSING \| READY \| FAILED` |
-| metadata | Json? | `fileUrl`, `fileName`, `fileSize`, `publicId`, `resourceType`, `importedFrom`, `videoId`, `processingError`, `chunkCount`, `pageCount`, `indexedAt` |
+| metadata | Json? | `fileUrl`, `fileName`, `fileSize`, `publicId`, `resourceType`, `importedFrom`, `videoId`, `processingError`, `chunkCount`, `pageCount`, `indexedAt`. PDF open and delete use `publicId` + `resourceType`, not `fileUrl`. |
 
 ### `source_chunk`
 | Column | Type | Notes |

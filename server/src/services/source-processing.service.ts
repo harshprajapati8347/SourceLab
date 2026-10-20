@@ -20,6 +20,7 @@ import type { Prisma } from "../generated/prisma/client.js";
 import { chunkPages, chunkText } from "../lib/chunking.js";
 import { embedTexts } from "../lib/openai.js";
 import { extractPdfFromCloudinary } from "../lib/pdf.js";
+import { prepareExtractedContent } from "../lib/source-format.js";
 import {
   deleteSourceVectors,
   type VectorMetadata,
@@ -90,7 +91,7 @@ async function extractSourceText(source: SourceRecord) {
     const extracted = await extractPdfFromCloudinary({
       fileUrl: metadata.fileUrl,
       publicId: metadata.publicId,
-      resourceType: metadata.resourceType ?? "image",
+      resourceType: metadata.resourceType,
     });
     return {
       text: extracted.text,
@@ -144,6 +145,7 @@ export async function markSourceFailed(
  *
  * - Fetches the source from Postgres
  * - Extracts text (from `content` column or PDF on Cloudinary)
+ * - Cleans PDF, website, and YouTube text without adding words
  * - Saves extracted text back to `source.content`
  * - Updates `metadata.pageCount` for PDFs
  *
@@ -156,7 +158,10 @@ export async function extractSourceContent(sourceId: string) {
     throw new Error("Source not found");
   }
 
-  const extracted = await extractSourceText(source);
+  const extracted = prepareExtractedContent(
+    source.type,
+    await extractSourceText(source),
+  );
   const metadata =
     source.metadata &&
     typeof source.metadata === "object" &&

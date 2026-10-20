@@ -6,7 +6,11 @@
  */
 
 import { extractText, getDocumentProxy } from "unpdf";
-import { getSignedCloudinaryDownloadUrl } from "./cloudinary.js";
+import {
+  getPdfDeliveryUrl,
+  getSignedCloudinaryDownloadUrl,
+  type CloudinaryResourceType,
+} from "./cloudinary.js";
 
 /** Result of extracting text from a PDF document. */
 export type PdfExtractResult = {
@@ -67,19 +71,36 @@ async function downloadPdf(url: string) {
 /**
  * Extracts text from a PDF stored on Cloudinary.
  *
- * Tries the public `fileUrl` first; on 401, falls back to a signed download URL
- * when `publicId` and Cloudinary API credentials are available.
+ * Prefers the authenticated download URL built from the stored public id.
+ * Public CDN links for PDFs on this account return 401, and a signed CDN URL
+ * does too. The stored file URL is only a fallback.
  *
  * @param input - Cloudinary file URL, public id, and resource type
  * @returns Extracted text and per-page content
- * @throws When download or extraction fails, or signed URL cannot be generated
- *
+ * @throws When download or extraction fails
  */
 export async function extractPdfFromCloudinary(input: {
   fileUrl: string;
   publicId?: string;
-  resourceType?: "raw" | "image";
+  resourceType?: CloudinaryResourceType;
 }): Promise<PdfExtractResult> {
+  const deliveryUrl =
+    input.publicId && input.resourceType
+      ? getPdfDeliveryUrl({
+          publicId: input.publicId,
+          resourceType: input.resourceType,
+        })
+      : null;
+
+  if (deliveryUrl) {
+    try {
+      const buffer = await downloadPdf(deliveryUrl);
+      return await extractPdfFromBuffer(buffer);
+    } catch {
+      // Fall through to the stored URL when the private link cannot be fetched.
+    }
+  }
+
   try {
     const buffer = await downloadPdf(input.fileUrl);
     return await extractPdfFromBuffer(buffer);
@@ -87,13 +108,13 @@ export async function extractPdfFromCloudinary(input: {
     const isUnauthorized =
       error instanceof Error && error.message.includes("(401)");
 
-    if (!isUnauthorized || !input.publicId) {
+    if (!isUnauthorized || !input.publicId || !input.resourceType) {
       throw error;
     }
 
     const signedUrl = getSignedCloudinaryDownloadUrl(
       input.publicId,
-      input.resourceType ?? "raw",
+      input.resourceType,
     );
 
     if (!signedUrl) {

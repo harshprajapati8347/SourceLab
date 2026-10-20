@@ -35,6 +35,12 @@ export function getSource(workspaceId: string, sourceId: string) {
   return apiFetch<Source>(`/api/workspaces/${workspaceId}/sources/${sourceId}`);
 }
 
+export function getSourcePdfUrl(workspaceId: string, sourceId: string) {
+  return apiFetch<{ url: string }>(
+    `/api/workspaces/${workspaceId}/sources/${sourceId}/file`,
+  );
+}
+
 export function getSourceChunks(workspaceId: string, sourceId: string) {
   return apiFetch<SourceChunksResponse>(
     `/api/workspaces/${workspaceId}/sources/${sourceId}/chunks`,

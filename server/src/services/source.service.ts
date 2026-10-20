@@ -1,5 +1,10 @@
 import type { Prisma } from "../generated/prisma/client.js";
-import { uploadPdfToCloudinary } from "../lib/cloudinary.js";
+import {
+  getPdfDeliveryUrl,
+  pdfSourceMetadata,
+  readCloudinaryAsset,
+  uploadPdfToCloudinary,
+} from "../lib/cloudinary.js";
 import { extractPdfFromBuffer } from "../lib/pdf.js";
 import { scrapeWebsite } from "../lib/firecrawl.js";
 import { enqueueSourceProcessing } from "../lib/source-events.js";
@@ -24,6 +29,7 @@ import type {
   ListSourcesQuery,
   ReprocessSourcesInput,
 } from "../validators/source.validator.js";
+import { cleanupCloudinaryAssets } from "./cloudinary-cleanup.service.js";
 import {
   listChunksForSource,
   removeSourceFromIndex,
@@ -160,14 +166,7 @@ export async function uploadPdfSource(
     title: title?.trim() || file.originalname.replace(/\.pdf$/i, ""),
     content,
     status: "PENDING",
-    metadata: {
-      fileUrl: upload.secureUrl,
-      fileName: upload.originalFilename,
-      fileSize: upload.bytes,
-      publicId: upload.publicId,
-      resourceType: upload.resourceType,
-      pageCount,
-    },
+    metadata: pdfSourceMetadata(upload, pageCount),
   });
 }
 
@@ -234,21 +233,54 @@ export async function importYoutubeSource(
 }
 
 /**
- * Deletes a source, its Pinecone vectors, and its Postgres chunks.
+ * Builds a short-lived URL for the Open PDF action.
+ *
+ * @param workspaceId - Workspace the source belongs to
+ * @param sourceId - PDF source
+ * @param userId - Authenticated user's id
+ * @returns A Cloudinary download URL for the stored asset
+ * @throws {NotFoundError} When the source is not a PDF or has no stored asset
+ */
+export async function getPdfDeliveryUrlForWorkspace(
+  workspaceId: string,
+  sourceId: string,
+  userId: string,
+) {
+  const source = await getSourceForWorkspace(workspaceId, sourceId, userId);
+  const asset = readCloudinaryAsset(source.metadata);
+
+  if (source.type !== "PDF" || !asset) {
+    throw new NotFoundError("PDF not found");
+  }
+
+  const url = getPdfDeliveryUrl(asset);
+  if (!url) {
+    throw new NotFoundError("PDF not found");
+  }
+
+  return { url };
+}
+
+/**
+ * Deletes a source, its Cloudinary file, its Pinecone vectors, and its chunks.
+ *
+ * Cloudinary is deleted first. A shared file is left alone. If the delete keeps
+ * failing, the source row stays so the request can be retried.
  *
  * @param workspaceId - Workspace the source belongs to
  * @param sourceId - Source to delete
  * @param userId - Authenticated user's id
  * @returns Resolves when the source row is deleted
  * @throws {NotFoundError} When the source is not found
- *
+ * @throws {AppError} When Cloudinary cleanup fails after retries
  */
 export async function deleteSourceForWorkspace(
   workspaceId: string,
   sourceId: string,
   userId: string,
 ) {
-  await getSourceForWorkspace(workspaceId, sourceId, userId);
+  const source = await getSourceForWorkspace(workspaceId, sourceId, userId);
+  await cleanupCloudinaryAssets([source]);
   await removeSourceFromIndex(workspaceId, sourceId);
   await deleteSourceRecord(sourceId);
 }
