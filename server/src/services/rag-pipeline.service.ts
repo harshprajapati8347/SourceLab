@@ -11,7 +11,7 @@ import {
   RAG_DEDUP_THRESHOLD,
   RAG_LEXICAL_LIMIT,
   RAG_MIN_SCORE,
-  RAG_NEUTRAL_FRESHNESS,
+  RAG_SUPPORTING_TERM_RATIO,
   RAG_TOPIC_COVERAGE_FLOOR,
 } from "../lib/ai-config.js";
 import {
@@ -52,13 +52,14 @@ import {
   asksConflictingValues,
   buildInsufficientEvidenceReply,
   conflictRetrievalQueries,
-  isWebSearchEligible,
   sharesWorkspaceSubject,
 } from "../lib/rag/request-disposition.js";
 import {
+  appendInsufficientEvidenceOffer,
   buildUncoveredTopicReply,
   focusFromTitles,
   missingRetrievalTerms,
+  supportingTermRatio,
   topicFromQuestion,
   WEB_RESEARCH_ACCEPTANCE,
 } from "../lib/rag/topic-gap.js";
@@ -75,7 +76,6 @@ import {
   needsCorrectiveRetrieval,
   type Contradiction,
   type RetrievalQuality,
-  type WebSnippet,
 } from "../lib/rag/retrieval-quality.js";
 import {
   findReadySourcesWithChunks,
@@ -104,6 +104,11 @@ export type RagPipelineResult = {
    * Null means the chat service should suggest them after the answer is written.
    */
   suggestions: string[] | null;
+  /**
+   * False when the passages do not contain enough of the question to answer it.
+   * Retrieval scores do not set this.
+   */
+  evidenceSufficient: boolean;
 };
 
 /**
@@ -113,12 +118,11 @@ export type RagPipelineResult = {
  * and do not report a perfect score. A coverage judgement failure does the same.
  * One rewrite runs when coverage or similarity is low. Freshness and authority
  * do not start that pass. A workspace lookup fills a missing question term.
- * Passages that still contain the question are kept. A current external question
- * searches the web when the topic is still missing and the toggle is on. A
- * workspace subject with a missing fact gets an insufficient-evidence reply.
- * An uncovered topic asks before any search. A short yes, or the same topic sent
- * again with the toggle on, searches that topic only. An explicit numeric
- * conflict keeps both passages.
+ * Passages that still contain the question are kept. Sufficiency is that term
+ * overlap, not the coverage or similarity score. An insufficient retrieval
+ * names the gap and asks before any web search, including when the toggle is
+ * on. A short yes, or the same topic sent again with the toggle on, searches
+ * that topic only. An explicit numeric conflict keeps both passages.
  *
  * @param input - Workspace, user text, conversation context, and web-search flag
  * @returns Chunks, conflicts, and web results ready for the system prompt
@@ -474,95 +478,46 @@ export async function runRagPipeline(input: {
         input,
         plan.queryClass,
         quality.uniqueChunks,
-        quality.dimensions.coverage,
       );
-      if (disposition !== "answer") {
-        trace.step({
-          id: "crag",
-          label: "CRAG",
-          status: "done",
-          summary:
-            disposition === "missing-fact"
-              ? "Sources do not specify this fact"
-              : "Sources don't cover this question",
-          lines: cragLines,
-        });
-        if (isWebSearchEligible(input.userText, input.webSearchEnabled)) {
-          return answerFromWeb(
-            input.userText,
-            trace,
-            plan,
-            transforms,
-            input.webSearchEnabled,
-          );
-        }
-        const missed = await replyIfWorkspaceMisses(
-          input,
-          plan,
-          transforms,
-          trace,
-          quality.uniqueChunks,
-          quality.dimensions.coverage,
-          false,
-        );
-        if (missed) {
-          return missed;
-        }
-      }
-    }
-
-    if (
-      needsCorrectiveRetrieval(quality.dimensions) &&
-      input.webSearchEnabled &&
-      !preserveConflicts
-    ) {
-      try {
-        trace.step({
-          id: "crag",
-          label: "CRAG",
-          status: "active",
-          summary: "Searching the web",
-          lines: cragLines,
-        });
-        webResults = await searchWebIfAllowed({
-          allowed: input.webSearchEnabled,
-          query: corrective.rewrittenQuery,
-        });
-        quality = await evaluateRetrievalQuality({
-          query: input.userText,
-          chunks: quality.uniqueChunks,
-          webSnippets: toWebSnippets(webResults),
-          preserveDistinctFacts: preserveConflicts,
-        });
-        if (quality.judgementFailed) {
-          return finishUnscored(
+        if (disposition !== "answer") {
+          trace.step({
+            id: "crag",
+            label: "CRAG",
+            status: "done",
+            summary:
+              disposition === "missing-fact"
+                ? "Sources do not specify this fact"
+                : "Sources don't cover this question",
+            lines: cragLines,
+          });
+          const missed = await replyIfWorkspaceMisses(
             input,
             plan,
             transforms,
             trace,
-            enriched,
-            lexicalPins,
-            preserveConflicts,
+            quality.uniqueChunks,
+            quality.dimensions.coverage,
+            false,
           );
+          if (missed) {
+            return missed;
+          }
         }
-        cragLines.push(`Web results: ${webResults.results.length}.`);
-      } catch {
-        cragLines.push("Web search failed. Continuing with workspace chunks.");
       }
-    } else if (
-      needsCorrectiveRetrieval(quality.dimensions) &&
-      preserveConflicts
-    ) {
-      cragLines.push(
-        "Both conflicting values were kept.",
-        "Web search was not used.",
-      );
-    } else if (
-      needsCorrectiveRetrieval(quality.dimensions) &&
-      !input.webSearchEnabled
-    ) {
-      cragLines.push("Web search was not used because the toggle is off.");
-    }
+
+      if (
+        needsCorrectiveRetrieval(quality.dimensions) &&
+        preserveConflicts
+      ) {
+        cragLines.push(
+          "Both conflicting values were kept.",
+          "Web search was not used.",
+        );
+      } else if (needsCorrectiveRetrieval(quality.dimensions)) {
+        cragLines.push(
+          "Web search was not started from the coverage or similarity score.",
+        );
+      }
 
     trace.step({
       id: "crag",
@@ -602,6 +557,19 @@ export async function runRagPipeline(input: {
     webResults,
     quality.dedupFailed,
   );
+
+  const missed = await replyIfWorkspaceMisses(
+    input,
+    plan,
+    transforms,
+    trace,
+    prepared.chunks,
+    quality.dimensions.coverage,
+    preserveConflicts,
+  );
+  if (missed) {
+    return missed;
+  }
 
   return finish(trace, {
     chunks: prepared.chunks,
@@ -801,8 +769,20 @@ async function workspaceDisposition(
   },
   queryClass: QueryClass,
   chunks: EnrichedChunk[],
-  coverage: number | null,
 ) {
+  const texts = chunks.map((chunk) => chunk.text);
+  if (queryClass === "conversational") {
+    return "answer" as const;
+  }
+
+  if (
+    (queryClass === "summarization" && texts.length > 0) ||
+    (texts.length > 0 &&
+      supportingTermRatio(input.userText, texts) >= RAG_SUPPORTING_TERM_RATIO)
+  ) {
+    return "answer" as const;
+  }
+
   let sharesSubject = sharesWorkspaceSubject(
     input.userText,
     chunks.flatMap((chunk) => [chunk.sourceTitle, chunk.text]),
@@ -818,7 +798,6 @@ async function workspaceDisposition(
     queryClass,
     question: input.userText,
     chunkTexts: chunks.map((chunk) => chunk.text),
-    coverage,
     sharesSubject,
   });
 }
@@ -895,15 +874,6 @@ function compressForPrompt(
   };
 }
 
-function toWebSnippets(response: TavilySearchResponse): WebSnippet[] {
-  return response.results.map((result) => ({
-    title: result.title,
-    url: result.url,
-    content: result.content,
-    score: typeof result.score === "number" ? result.score : RAG_NEUTRAL_FRESHNESS,
-  }));
-}
-
 const QUERY_CLASS_LABELS: Record<QueryClass, string> = {
   simple_factual: "Simple factual",
   multi_hop: "Multi-hop",
@@ -921,12 +891,21 @@ function finish(
   trace: RagTraceRecorder,
   result: Omit<
     RagPipelineResult,
-    "trace" | "directReply" | "researchTopic" | "sourceSamples" | "suggestions"
+    | "trace"
+    | "directReply"
+    | "researchTopic"
+    | "sourceSamples"
+    | "suggestions"
+    | "evidenceSufficient"
   > &
     Partial<
       Pick<
         RagPipelineResult,
-        "directReply" | "researchTopic" | "sourceSamples" | "suggestions"
+        | "directReply"
+        | "researchTopic"
+        | "sourceSamples"
+        | "suggestions"
+        | "evidenceSufficient"
       >
     >,
 ): RagPipelineResult {
@@ -935,6 +914,7 @@ function finish(
     researchTopic: null,
     sourceSamples: [],
     suggestions: null,
+    evidenceSufficient: true,
     ...result,
     trace: trace.snapshot(),
   };
@@ -1010,7 +990,6 @@ async function replyIfWorkspaceMisses(
     input,
     plan.queryClass,
     chunks,
-    coverage,
   );
 
   if (decision === "answer") {
@@ -1018,7 +997,10 @@ async function replyIfWorkspaceMisses(
   }
 
   if (decision === "missing-fact") {
-    const reply = buildInsufficientEvidenceReply(input.userText);
+    const reply = appendInsufficientEvidenceOffer({
+      text: buildInsufficientEvidenceReply(input.userText),
+      topic: topicFromQuestion(input.userText),
+    });
     trace.step({
       id: "source-coverage",
       label: "Source coverage",
@@ -1035,6 +1017,8 @@ async function replyIfWorkspaceMisses(
       queryClass: plan.queryClass,
       transforms,
       directReply: reply,
+      evidenceSufficient: false,
+      suggestions: [WEB_RESEARCH_ACCEPTANCE],
     });
   }
 
@@ -1046,47 +1030,6 @@ async function replyIfWorkspaceMisses(
     chunks,
     coverage ?? 0,
   );
-}
-
-/**
- * Answers a current external question from Tavily when the workspace missed it.
- *
- * @param query - User question to search
- * @param trace - Trace recorder for this turn
- * @param plan - Retrieval plan, kept on the result for the trace
- * @param transforms - Transforms already applied
- * @param allowed - True only when this request may call Tavily
- * @returns Web results for the chat model, or a direct reply when search fails
- */
-async function answerFromWeb(
-  query: string,
-  trace: RagTraceRecorder,
-  plan: QueryPlan,
-  transforms: QueryTransform[],
-  allowed: boolean,
-): Promise<RagPipelineResult> {
-  trace.step({
-    id: "crag",
-    label: "CRAG",
-    status: "active",
-    summary: "Searching the web",
-    lines: [query],
-  });
-
-  try {
-    const webResults = await searchWebIfAllowed({ allowed, query });
-    return finishWebSearch(
-      trace,
-      plan.queryClass,
-      transforms,
-      query,
-      webResults,
-      false,
-    );
-  } catch {
-    logRagEvent("web-research", { failed: true });
-    return finishWebSearch(trace, plan.queryClass, transforms, query, null, true);
-  }
 }
 
 function finishWebSearch(
@@ -1149,7 +1092,8 @@ async function finishUncovered(
     status: "done",
     summary: `Not covered: ${topic}`,
     lines: [
-      `Coverage ${formatScore(coverage)} is below ${RAG_TOPIC_COVERAGE_FLOOR}, or the passages do not mention the topic.`,
+      "The passages do not contain enough of the question to answer it.",
+      "The coverage score did not decide this.",
       focus ? `Notebook focus: ${focus}` : "No ready source text to describe.",
       "Offered web research. A yes on the next turn runs the search.",
     ],
@@ -1169,6 +1113,7 @@ async function finishUncovered(
     }),
     suggestions: [WEB_RESEARCH_ACCEPTANCE, ...described.questions].slice(0, 3),
     sourceSamples: samples,
+    evidenceSufficient: false,
   });
 }
 

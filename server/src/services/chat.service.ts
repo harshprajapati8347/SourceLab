@@ -47,6 +47,7 @@ import {
   appendEmbeddedInstructionNote,
   asksConflictingValues,
 } from "../lib/rag/request-disposition.js";
+import { repairResponseFormatting } from "../lib/rag/response-format.js";
 import { buildChatSystemPrompt } from "../lib/rag/retrieve.js";
 import {
   readStoredSuggestions,
@@ -54,6 +55,7 @@ import {
   type NotebookPassage,
 } from "../lib/rag/suggested-questions.js";
 import {
+  appendInsufficientEvidenceOffer,
   focusFromTitles,
   topicFromQuestion,
   WEB_RESEARCH_ACCEPTANCE,
@@ -61,6 +63,7 @@ import {
 import {
   replaceUnauthorizedAnswer,
   searchWebIfAllowed,
+  shouldOfferWebResearch,
   WebSearchNotAuthorizedError,
   webSearchFailedReply,
 } from "../lib/rag/web-search-policy.js";
@@ -250,7 +253,7 @@ async function resolveConversation(
  * 2. Resolve/create conversation, reject a thread already at the message limit, and save the user message
  * 3. Parallel: query and context pipeline + Mem0 search (user memory and this notebook)
  * 4. Build system prompt and generate the model response via AI SDK
- * 5. Check grounding and citations, then run local output guards
+ * 5. Check grounding and citations, run local output guards, then repair Markdown
  * 6. On finish: save the safe assistant message, citations, title, summary job, Mem0 learning
  *
  * @param res - Express response (streamed via `pipeUIMessageStreamToResponse`)
@@ -327,6 +330,7 @@ export async function streamWorkspaceChat(
   let webSearchResults: TavilySearchResponse | null = null;
   let webSearchFailed = false;
   let suggestions: string[] = [];
+  let offerWebResearch = false;
   let citations: Array<{
     sourceId?: string;
     sourceTitle: string;
@@ -382,13 +386,14 @@ export async function streamWorkspaceChat(
       }));
       const chunkCitations = citations.map((citation) => ({ ...citation }));
       webSearchResults = pipeline.webResults;
+      const searchConsented = Boolean(pipeline.researchTopic);
 
       const systemPrompt = buildChatSystemPrompt({
         chunks: pipeline.chunks,
         conversationSummary: conversation.summary,
         userMemories: memories.userMemories,
         workspaceMemories: memories.workspaceMemories,
-        webSearchEnabled,
+        webSearchEnabled: searchConsented,
         webResults: pipeline.webResults,
         contradictions: pipeline.contradictions,
         weakEvidence: pipeline.weakEvidence,
@@ -447,7 +452,7 @@ export async function streamWorkspaceChat(
           ],
         });
         console.info("[rag] Generating → started");
-        const tools = webSearchEnabled
+        const tools = searchConsented
           ? {
               web_search: tool({
                 description:
@@ -461,7 +466,7 @@ export async function streamWorkspaceChat(
                   let results;
                   try {
                     results = await searchWebIfAllowed({
-                      allowed: webSearchEnabled,
+                      allowed: searchConsented,
                       query,
                     });
                   } catch (error) {
@@ -505,7 +510,7 @@ export async function streamWorkspaceChat(
           system: systemPrompt,
           messages: await convertToModelMessages(contextMessages),
           tools,
-          stopWhen: webSearchEnabled ? isStepCount(3) : undefined,
+          stopWhen: searchConsented ? isStepCount(3) : undefined,
         });
 
         drafted = (await result.text).trim();
@@ -574,8 +579,7 @@ export async function streamWorkspaceChat(
           lines: grounded.coverage.lines,
         });
 
-        const searchAllowed =
-          webSearchEnabled || Boolean(pipeline.researchTopic);
+        const searchAllowed = searchConsented;
         let candidate = pruneUnsupportedWebMarkers(
           grounded.text,
           webSearchResults?.results ?? [],
@@ -600,6 +604,7 @@ export async function streamWorkspaceChat(
             chunkCount: evidenceChunks.length,
             withheld: grounded.withheld,
             conversational: pipeline.queryClass === "conversational",
+            evidenceSufficient: pipeline.evidenceSufficient,
             topic: topicFromQuestion(textForModel),
             focus: focusFromTitles(
               pipeline.sourceSamples.map((sample) => sample.title),
@@ -632,7 +637,20 @@ export async function streamWorkspaceChat(
         });
 
         finalText = textReleasedAfterOutputCheck(checked, false);
-        if (!checked.blocked && offeredResearch) {
+        const formatted = repairResponseFormatting(finalText);
+        finalText = formatted.text;
+        offerWebResearch =
+          shouldOfferWebResearch({
+            evidenceSufficient: pipeline.evidenceSufficient,
+            conversational: pipeline.queryClass === "conversational",
+            researchTopic: pipeline.researchTopic,
+          }) && !checked.blocked;
+        if (offerWebResearch) {
+          finalText = appendInsufficientEvidenceOffer({
+            text: finalText,
+            topic: topicFromQuestion(textForModel),
+          });
+        } else if (!checked.blocked && offeredResearch) {
           suggestions = [WEB_RESEARCH_ACCEPTANCE];
         }
         citations = await shortenCitationExcerpts(
@@ -703,6 +721,13 @@ export async function streamWorkspaceChat(
               (webSearchResults?.results.length ?? 0) === 0,
           });
         }
+      }
+
+      if (offerWebResearch) {
+        suggestions = [
+          WEB_RESEARCH_ACCEPTANCE,
+          ...suggestions.filter((item) => item !== WEB_RESEARCH_ACCEPTANCE),
+        ].slice(0, 3);
       }
 
       writer.write({

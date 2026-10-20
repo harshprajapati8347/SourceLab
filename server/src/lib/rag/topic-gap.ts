@@ -77,6 +77,13 @@ export const WEB_RESEARCH_ACCEPTANCE = "Yes, search the web";
 const RESEARCH_OFFER =
   /Would you like me to perform web research on ([^?\n]+)\?/g;
 
+/** Sentence that states the retrieved sources cannot answer the question. */
+export const INSUFFICIENT_EVIDENCE_NOTICE =
+  "The available sources are not sufficient to answer this.";
+
+const INSUFFICIENT_NOTICE =
+  /not sufficient to answer|don't seem to cover|do not contain enough information/i;
+
 /**
  * Coverage this low means the passages do not answer the question.
  *
@@ -274,11 +281,49 @@ export function buildUncoveredTopicReply(input: {
 }) {
   const topic = input.topic.trim() || "that topic";
   const focus = normalizeFocus(input.focus);
-  const coverage = focus
-    ? `Your sources don't seem to cover ${topic}. Your notebook currently focuses on ${focus}.`
-    : `Your sources don't seem to cover ${topic}. This notebook doesn't have ready sources yet.`;
+  const focusSentence = focus
+    ? `Your notebook currently focuses on ${focus}.`
+    : "This notebook doesn't have ready sources yet.";
 
-  return `${coverage} Would you like me to perform web research on ${topic}?`;
+  return `Your sources don't seem to cover ${topic}. ${INSUFFICIENT_EVIDENCE_NOTICE} ${focusSentence} Would you like me to perform web research on ${topic}?`;
+}
+
+/**
+ * Adds the insufficiency notice and the web-research question after a reply.
+ *
+ * A reply that already says the sources are insufficient and already asks the
+ * question is left unchanged. The question is how the next turn grants consent.
+ *
+ * @param input - Released reply and the topic label
+ * @returns The reply with the offer after it
+ */
+export function appendInsufficientEvidenceOffer(input: {
+  text: string;
+  topic: string;
+}) {
+  const topic = input.topic.trim() || "that topic";
+  const question = `Would you like me to perform web research on ${topic}?`;
+  const text = input.text.trim();
+  const hasQuestion = new RegExp(RESEARCH_OFFER.source, "i").test(text);
+  const hasNotice = INSUFFICIENT_NOTICE.test(text);
+
+  if (!text) {
+    return `${INSUFFICIENT_EVIDENCE_NOTICE} ${question}`;
+  }
+
+  if (hasQuestion && hasNotice) {
+    return text;
+  }
+
+  const parts = [text];
+  if (!hasNotice) {
+    parts.push(INSUFFICIENT_EVIDENCE_NOTICE);
+  }
+  if (!hasQuestion) {
+    parts.push(question);
+  }
+
+  return parts.join("\n\n");
 }
 
 /**

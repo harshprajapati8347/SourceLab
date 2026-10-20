@@ -342,6 +342,9 @@ export function buildChatSystemPrompt(input: {
         ? "If a requested detail is not in the workspace context, search the web before saying it is missing."
         : "If a requested detail is not stated in the retrieved context, say that it is not in the sources in its own sentence.",
     "Do not infer, guess, or fill in missing details.",
+    "Format the reply as Markdown. Put a blank line before a heading and between paragraphs.",
+    "Use a list for parallel points, and do not leave an empty bullet or an empty heading.",
+    "Do not repeat the same sentence.",
     "Keep answers concise, accurate, and educational.",
     "",
     "Retrieved context:",

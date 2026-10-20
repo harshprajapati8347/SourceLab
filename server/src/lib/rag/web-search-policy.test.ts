@@ -9,6 +9,7 @@ import {
   retrievalDisposition,
   searchWebIfAllowed,
   settleWebSearch,
+  shouldOfferWebResearch,
   WebSearchNotAuthorizedError,
 } from "./web-search-policy.js";
 
@@ -124,7 +125,6 @@ describe("web search consent", () => {
         queryClass: "procedural",
         question: S3,
         chunkTexts: ["This notebook is about compilers."],
-        coverage: 0.1,
         sharesSubject: false,
       }),
       "ask-web",
@@ -154,7 +154,6 @@ describe("web search consent", () => {
         chunkTexts: [
           "The encryption standard used for data at rest is AES-256.",
         ],
-        coverage: 0.2,
         sharesSubject: true,
       }),
       "answer",
@@ -167,7 +166,6 @@ describe("web search consent", () => {
         queryClass: "simple_factual",
         question: "What encryption standard is used for data at rest?",
         chunkTexts: ["The encryption standard used for data at rest is AES-256."],
-        coverage: 0.8,
         sharesSubject: true,
       }),
       "answer",
@@ -180,10 +178,85 @@ describe("web search consent", () => {
         queryClass: "simple_factual",
         question: "What is NovaDesk's annual enterprise contract price?",
         chunkTexts: ["NovaDesk is a workspace product."],
-        coverage: 0.2,
         sharesSubject: true,
       }),
       "missing-fact",
+    );
+  });
+
+  it("asks when an overview has no passages", () => {
+    assert.equal(
+      retrievalDisposition({
+        queryClass: "summarization",
+        question: "Summarize the notebook",
+        chunkTexts: [],
+        sharesSubject: false,
+      }),
+      "ask-web",
+    );
+    assert.equal(
+      retrievalDisposition({
+        queryClass: "summarization",
+        question: "Summarize the notebook",
+        chunkTexts: ["A passage from the notebook."],
+        sharesSubject: true,
+      }),
+      "answer",
+    );
+  });
+
+  it("does not offer web search when the passages already contain the question", () => {
+    assert.equal(
+      shouldOfferWebResearch({
+        evidenceSufficient: true,
+        conversational: false,
+        researchTopic: null,
+      }),
+      false,
+    );
+  });
+
+  it("offers web search from evidence sufficiency, not from the draft wording", () => {
+    assert.equal(
+      shouldOfferWebResearch({
+        evidenceSufficient: false,
+        conversational: false,
+        researchTopic: null,
+      }),
+      true,
+    );
+    assert.equal(
+      shouldOfferWebResearch({
+        evidenceSufficient: false,
+        conversational: true,
+        researchTopic: null,
+      }),
+      false,
+    );
+    assert.equal(
+      shouldOfferWebResearch({
+        evidenceSufficient: false,
+        conversational: false,
+        researchTopic: "Software Engineering",
+      }),
+      false,
+    );
+  });
+
+  it("keeps a grounded reply that mentions a gap when the passages are sufficient", () => {
+    const answer = "The workspace sources do not specify a second encryption mode [1].";
+    assert.equal(
+      replaceUnauthorizedAnswer({
+        answer,
+        searchAllowed: false,
+        chunkCount: 1,
+        withheld: true,
+        conversational: false,
+        evidenceSufficient: true,
+        topic: "Encryption mode",
+        focus: "Security",
+      }),
+      answer,
     );
   });
 

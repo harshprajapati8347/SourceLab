@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import {
   acceptsWebResearch,
+  appendInsufficientEvidenceOffer,
   buildUncoveredTopicReply,
   focusFromTitles,
   pendingWebResearchTopic,
@@ -19,7 +20,7 @@ describe("uncovered topic replies", () => {
 
     assert.equal(
       reply,
-      "Your sources don't seem to cover Software Engineering. Your notebook currently focuses on AI. Would you like me to perform web research on Software Engineering?",
+      "Your sources don't seem to cover Software Engineering. The available sources are not sufficient to answer this. Your notebook currently focuses on AI. Would you like me to perform web research on Software Engineering?",
     );
     assert.equal(pendingWebResearchTopic(`assistant: ${reply}`), "Software Engineering");
   });
@@ -87,5 +88,26 @@ describe("uncovered topic replies", () => {
     ].join("\n");
 
     assert.equal(pendingWebResearchTopic(turns), null);
+  });
+
+  it("adds the research question after a reply that never mentions a gap", () => {
+    const reply = appendInsufficientEvidenceOffer({
+      text: "NovaDesk stores projects in workspaces [1].",
+      topic: "NovaDesk's annual enterprise contract price",
+    });
+
+    assert.match(reply, /workspaces \[1\]\./);
+    assert.match(
+      reply,
+      /The available sources are not sufficient to answer this\./,
+    );
+    assert.equal(
+      pendingWebResearchTopic(`assistant: ${reply.replace(/\s+/g, " ")}`),
+      "NovaDesk's annual enterprise contract price",
+    );
+    assert.equal(
+      appendInsufficientEvidenceOffer({ text: reply, topic: "Ignored" }),
+      reply,
+    );
   });
 });

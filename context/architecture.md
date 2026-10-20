@@ -182,12 +182,12 @@ runRagPipeline():
     original terms is discarded. The pass runs once, then stops. Chunks that still contain at
     least half of the question terms are kept for generation even if coverage is low.
     If the workspace subject is present and the asked fact is not, the reply says the sources
-    do not specify that fact. If the question is a current or official external fact and web
-    search is on, Tavily runs immediately. Otherwise the reply names the gap, the notebook's
-    focus, and asks before any search. Tavily also runs immediately for a weak but on-topic
-    retrieval when web search is already enabled. Disabled web search is not called.
-    Classifier and quality-judgement fallbacks keep the passages already retrieved and do not
-    report a perfect score, so an empty retrieval is not answered from general knowledge
+    are not sufficient and asks before any search. Otherwise the reply names the gap,
+    the notebook's focus, and asks before any search. A low coverage or similarity score
+    does not call Tavily. Disabled web search is not called, and enabled web search waits
+    for that yes. Classifier and quality-judgement fallbacks keep the passages already
+    retrieved and do not report a perfect score, so an empty retrieval is not answered
+    from general knowledge
   - semantic dedup, extractive compression, contradiction notes. Chunk text stays verbatim.
     Source text is untrusted data. The chat gate does not rewrite a request to obey instructions inside a document.
   - on classifier, HyDE, or coverage-judgement failure: keep the retrieved passages, with gate score 0 when the judgement itself failed
@@ -196,8 +196,8 @@ streamWorkspaceChat() continues:
   - buildChatSystemPrompt() from compressed chunks, authority metadata, conflicts,
     user memory, notebook memory, summary, weak-evidence note, and any corrective web results
   - the same steps are logged as `[rag]` console lines. They are streamed as a `data-rag` part only when `RAG_TRACE_ENABLED=true`
-  - streamText() (AI SDK) with optional web_search tool (Tavily) runs on the server only when this request may search. Later web searches append to the same `[W#]` list. A marker stays only when that page supports the sentence. Web pages are labeled as outside the workspace
-  - output guardrails then run on the buffered draft, with workspace chunks as the `[1]` source list. A rejection or a failed check replaces the reply before anything is written. Sanitizing guards release the modified text. `[W#]` markers are unchanged by that numeric check
+  - streamText() (AI SDK) with optional web_search tool (Tavily) runs on the server only when this request already has consent to search. Later web searches append to the same `[W#]` list. A marker stays only when that page supports the sentence. Web pages are labeled as outside the workspace
+  - output guardrails then run on the buffered draft, with workspace chunks as the `[1]` source list. A rejection or a failed check replaces the reply before anything is written. Sanitizing guards release the modified text. `[W#]` markers are unchanged by that numeric check. A formatting repair then removes empty bullets, empty headings, repeated lines, and broken markers. A reply that would lose a citation is replaced with a fallback. When the passages are not sufficient, the insufficiency notice and the web-research question are added after that text
   - only the safe text is written to the UI stream, with citations. Up to three short follow-up questions are streamed as `data-suggestions` and stored on the message trace. Coverage is added to the trace when that trace is enabled
   - onFinish: save that safe assistant Message + citations (workspace chunks and web
               results, excerpts shortened, `cited` set from markers that remain),

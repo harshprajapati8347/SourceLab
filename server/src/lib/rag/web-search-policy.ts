@@ -12,8 +12,6 @@ import {
 } from "../tavily.js";
 import { RAG_SUPPORTING_TERM_RATIO } from "../ai-config.js";
 import {
-  questionTermsMissing,
-  sourcesMissTopic,
   supportingTermRatio,
   buildUncoveredTopicReply,
   pendingWebResearchTopic,
@@ -85,22 +83,26 @@ export function acceptedResearchTopic(input: {
 /**
  * Whether workspace passages are enough to answer, or the user should be asked first.
  *
- * A conversational turn is always answered. Passages that contain at least half
- * of the question terms are answered even when coverage is low. A shared subject
- * with a missing fact stays on the insufficient-evidence reply. Anything else
- * that misses the question asks for web research and does not search.
+ * A conversational turn is always answered. An overview with passages is answered.
+ * Passages that contain at least half of the question terms are enough to answer. Coverage and
+ * similarity scores are not consulted. A shared subject that still lacks those
+ * terms stays on the insufficient-evidence reply. Anything else asks for web
+ * research and does not search.
  *
- * @param input - Query class, question, passage text, coverage, and subject overlap
+ * @param input - Query class, question, passage text, and subject overlap
  * @returns The retrieval outcome for this turn
  */
 export function retrievalDisposition(input: {
   queryClass: string;
   question: string;
   chunkTexts: string[];
-  coverage: number | null;
   sharesSubject: boolean;
 }): RetrievalDisposition {
   if (input.queryClass === "conversational") {
+    return "answer";
+  }
+
+  if (input.queryClass === "summarization" && input.chunkTexts.length > 0) {
     return "answer";
   }
 
@@ -112,20 +114,32 @@ export function retrievalDisposition(input: {
     return "answer";
   }
 
-  const missed =
-    input.chunkTexts.length === 0 ||
-    (input.coverage != null && sourcesMissTopic(input.coverage)) ||
-    questionTermsMissing(input.question, input.chunkTexts);
-
-  if (!missed) {
-    return "answer";
-  }
-
   if (input.sharesSubject) {
     return "missing-fact";
   }
 
   return "ask-web";
+}
+
+/**
+ * Whether this turn should ask before any web search.
+ *
+ * The decision uses the retrieval outcome only. A sentence in the draft that
+ * mentions a missing detail does not start or suppress the offer.
+ *
+ * @param input - Sufficiency, query shape, and whether this turn already searched
+ * @returns True when the reply should end with the research question
+ */
+export function shouldOfferWebResearch(input: {
+  evidenceSufficient: boolean;
+  conversational: boolean;
+  researchTopic: string | null;
+}) {
+  return (
+    !input.evidenceSufficient &&
+    !input.conversational &&
+    !input.researchTopic
+  );
 }
 
 /**
@@ -176,10 +190,10 @@ export function webSearchFailedReply(topic: string) {
 /**
  * Replaces an ungrounded factual draft when this request was not allowed to search.
  *
- * Workspace answers that were not withheld stay. Conversational replies stay.
- * A how-to with no supporting passage becomes the research offer when search
- * was not allowed, or the search-failure reply when search was allowed but
- * nothing was cited.
+ * A turn whose passages already answer the question stays, including a draft
+ * that mentions a missing detail. Conversational replies stay. A how-to with
+ * no supporting passage becomes the research offer when search was not allowed,
+ * or the search-failure reply when search was allowed but nothing was cited.
  *
  * @param input - Draft, consent, and whether any workspace passage was available
  * @returns The text to release
@@ -190,10 +204,11 @@ export function replaceUnauthorizedAnswer(input: {
   chunkCount: number;
   withheld: boolean;
   conversational: boolean;
+  evidenceSufficient?: boolean;
   topic: string;
   focus: string | null;
 }) {
-  if (input.conversational) {
+  if (input.conversational || input.evidenceSufficient) {
     return input.answer;
   }
 

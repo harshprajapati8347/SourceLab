@@ -147,7 +147,7 @@ Hook: `useSignOut` (`hooks/use-sign-out.ts`). `app/(auth)/layout.tsx` is a split
 | `ChatEmptyState` (`chat-empty-state.tsx`) | Empty thread: no sources gives an "Add your first source" action; otherwise starter prompt chips |
 | `SuggestedQuestions` (`suggested-questions.tsx`) | Up to three short next questions under the latest assistant reply. The whole card sends that question. Hidden while a reply is streaming and on older messages |
 | `SourceStatusBanner` (`source-status-banner.tsx`) | Non-blocking strip above the composer for indexing or failed sources |
-| `ChatMessageBody` (`chat-message-body.tsx`) | Assistant Markdown with inline `CitationMarker`s |
+| `ChatMessageBody` (`chat-message-body.tsx`) | Assistant Markdown with inline `CitationMarker`s. The server repairs the Markdown before this component renders it |
 | `CitationMarker` (`citation-marker.tsx`) | Mono amber chip (`[1]`) with a hover `CitationPreview` |
 | `CitationPreview` (`citation-preview.tsx`) | Hover card: source, excerpt, page when present, "Open passage" to `?chunk=`, "Save to library" for web results (with toast) |
 | `CitationSources` (`citation-sources.tsx`) | Unique source chips under an assistant reply. Workspace chips open the cited chunk. Web chips link to the result URL and show the site host |
